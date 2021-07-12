@@ -5,6 +5,11 @@ Bioinformatic analysis scripts for Sherlock-Lung pilot study. We inlcuded four d
 ## Examples
 
 ### for SNVs
-sh variant-filter-multiple.sh /data/zhangt8/NSLC/Calling/Sentieon/TNseq/NSLC-0002-T01/NSLC-0002-T01-tnsnv.vcf.gz /data/zhangt8/NSLC/Calling/Sentieon/TNseq/NSLC-0002-T01/NSLC-0002-T01-tnhaplotyper.vcf.gz /data/zhangt8/NSLC/Calling/Sentieon/TNseq/NSLC-0002-T01/NSLC-0002-T01-tnscope.vcf.gz /data/zhangt8/NSLC/Calling/strelka/NSLC-0002-T01/strelka_output/results/variants/somatic.snvs.vcf.gz /data/zhangt8/NSLC/Calling/strelka/NSLC-0002-T01/strelka_output/results/variants/somatic.indels.vcf.gz /data/ITEB_Lung_WGS/Rawdata/Wave1/SC349575.bam /data/ITEB_Lung_WGS/Rawdata/Wave1/SC349706.bam NSLC-0002-T01
+sh variant-filter-snv.sh /PATH_to_TNSNV_VCF/ /PATH_to_TNHAPLOTYPER_VCF/ /PATH_to_TNSCOPE_VCF/ /PATH_to_STRELKA_SNVs_VCF/ /PATH_to_STRELKA_INDEL_VCF/ /PATH_to_NORMAL_VCF/ /PATH_to_Tumor_BAM/ OUTPUT_PREFEIX
+
+sh variant-filter-snv.sh /data/zhangt8/NSLC/Calling/Sentieon/TNseq/NSLC-0002-T01/NSLC-0002-T01-tnsnv.vcf.gz /data/zhangt8/NSLC/Calling/Sentieon/TNseq/NSLC-0002-T01/NSLC-0002-T01-tnhaplotyper.vcf.gz /data/zhangt8/NSLC/Calling/Sentieon/TNseq/NSLC-0002-T01/NSLC-0002-T01-tnscope.vcf.gz /data/zhangt8/NSLC/Calling/strelka/NSLC-0002-T01/strelka_output/results/variants/somatic.snvs.vcf.gz /data/zhangt8/NSLC/Calling/strelka/NSLC-0002-T01/strelka_output/results/variants/somatic.indels.vcf.gz /data/ITEB_Lung_WGS/Rawdata/Wave1/SC349575.bam /data/ITEB_Lung_WGS/Rawdata/Wave1/SC349706.bam NSLC-0002-T01
 
 ## for INDELs
+sh variant-filter-snv.sh /PATH_to_TNHAPLOTYPER_VCF/ /PATH_to_TNSCOPE_VCF/ /PATH_to_STRELKA_INDEL_VCF/ /PATH_to_Tumor_BAM/ /PATH_to_NORMAL_VCF/ OUTPUT_PREFEIX
+
+sh variant-filter-indel.sh /data/zhangt8/NSLC/Calling/Sentieon/TNseq/NSLC-0123-T01/NSLC-0123-T01-tnhaplotyper.vcf.gz /data/zhangt8/NSLC/Calling/Sentieon/TNseq/NSLC-0123-T01/NSLC-0123-T01-tnscope.vcf.gz /data/zhangt8/NSLC/Calling/strelka/NSLC-0123-T01/strelka_output/results/variants/somatic.indels.vcf.gz /data/ITEB_Lung_WGS/Rawdata/Wave1/SC349808.bam /data/ITEB_Lung_WGS/Rawdata/Wave1/SC349821.bam NSLC-0123-T01
