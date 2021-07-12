@@ -1,2 +1,2 @@
 # Sherlock-Lung
-Bioinformatic analysis script for Sherlock-Lung project
+Bioinformatic analysis scripts for Sherlock-Lung project
