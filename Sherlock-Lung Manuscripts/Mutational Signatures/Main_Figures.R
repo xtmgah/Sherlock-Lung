@@ -30,6 +30,7 @@ drglist <- sherlock_driver_mutations %>% filter(Hugo_Symbol %in% drglist,Tumor_B
 
 
 #The presence of a specific signature was considered for the enrichment analysis (or the dichotomization of values above and below the median of assigned mutations, if the signature was present in above 50% of the samples). 
+ludmil_activity_all <- ludmil_activity_all %>% filter(Tumor_Barcode %in% sherlock_nonsmoker)
 ludmil_activity_all_obs1 <- ludmil_activity_all %>% mutate(across(where(is.numeric),~ . > 0))
 tmpcolnames <- colnames(ludmil_activity_all_obs1)
 excludesigs <- ludmil_activity_all_obs1 %>% pivot_longer(-Tumor_Barcode) %>% mutate(value=if_else(is.na(value),FALSE,value)) %>% count(name,value) %>% filter(value) %>% arrange(n) %>% filter(n==1) %>% pull(name)
@@ -464,7 +465,27 @@ freqdata_all %>%
   theme(axis.text.x = element_text(angle = 90,vjust = 0.5,hjust = 1),panel.spacing = unit(0.2,'cm'),strip.text.x = element_text(hjust = 0.5,face = 'bold'),strip.text.y = element_text(hjust = 0.5,face = 'bold'),legend.key.height = unit(1,'cm'))+
   panel_border(color = 'black',size = 0.4)
 
-ggsave(filename = 'Prevalence_overall.pdf',width = 20,height = 4,device = cairo_pdf)
+
+freqdata_all %>% 
+  mutate(Signature = factor(Signature,levels=siglevs)) %>% 
+  mutate(Type = str_replace(Type,"Prevalence by","By")) %>% 
+  mutate(lab=if_else(Value>0.05,as.character(percent(Value,accuracy=1)), NA_character_)) %>% 
+  mutate(Value=Value*100) %>% 
+  mutate(Type=str_remove(Type,'s$')) %>% 
+  ggplot(aes(Signature,Histology,fill=Value))+
+  #geom_tile(col='white',linewidth=0.2)+
+  geom_point(aes(size=Value),pch=21,stroke=0.5)+
+  #geom_text(aes(label=lab),col='gray50',size=3)+
+  facet_grid(Type~Profile,scales = 'free',space = 'free')+
+  scale_fill_viridis_c(limit=c(0,100),breaks=pretty_breaks())+
+  scale_size(limit=c(0,100),breaks = pretty_breaks())+
+  labs(x=NULL,y=NULL,fill='Prevalence')+
+  theme_ipsum_rc(grid = FALSE,plot_margin=margin(5.5,5.5,5.5,5.5))+
+  theme(axis.text.x = element_text(angle = 90,vjust = 0.5,hjust = 1),panel.spacing = unit(0.2,'cm'),strip.text.x = element_text(hjust = 0.5,face = 'bold'),strip.text.y = element_text(hjust = 0.5,face = 'bold'),legend.key.height = unit(0.5,'cm'),legend.position = 'top',legend.key.width = unit(2,'cm'))+
+  guides(size = guide_legend(nrow = 1))+
+  panel_border(color = 'black',size = 0.4)
+
+ggsave(filename = 'Prevalence_overall2.pdf',width = 16,height = 3.6,device = cairo_pdf)
 
 
 
@@ -623,7 +644,7 @@ ggsave(filename = 'SBS_N_LUAD_EUR_prevalence2.pdf',width = 5,height = 5,device =
 testdata <- sherlock_data_full %>% 
   filter(Gene %in% drglist, Type=='Mutation_Driver') %>% 
   left_join(covdata0) %>% 
-  filter(Tumor_Barcode %in% luad_nonsmoker_nonSBS4, Assigned_Population %in% c('EAS','EUR')) %>% 
+  filter(Tumor_Barcode %in% luad_nonsmoker, Assigned_Population %in% c('EAS','EUR')) %>% 
   mutate(Assigned_Population = factor(Assigned_Population, levels=c('EAS','EUR')))
 
 plotdata <- testdata %>% 
@@ -787,14 +808,15 @@ plotdata <- tdata %>%
 plotdata$term
 plotdata$term <-  c('Age','Ethnicity: EAS\nRef=EUR', 'Ethnicity: Others\nRef=EUR','Sex: Female\nRef=Male','Histology: Carcinoid Tumor\nRef=LUAD','Histology: Others\nRef=LUAD','Histology: LUSC\nRef=LUAD','Passive Smoking: Yes\nRef=No','Tumor Purity')
 
-plotdata %>% 
+p <- plotdata %>% 
   mutate(term=fct_reorder(term,estimate)) %>% 
-  mutate(p.value = if_else(p.value>0.05,NA,p.value)) %>% 
+  #mutate(p.value = if_else(p.value>0.05,NA,p.value)) %>% 
+  mutate(p.value = if_else(str_detect(term, 'Passive'),p.value,NA)) %>% 
   ggplot(aes(estimate, term, xmin = conf.low, xmax = conf.high, height = 0,color=-log10(p.value))) +
   geom_vline(xintercept = 0, lty = 5) +
   geom_errorbarh(height = .3)+
   geom_point(pch=19,size=4) +
-  scale_color_gradient(low = "#EE5250FF" ,high = "#B71B1BFF",na.value = ncicolpal[8])+
+  scale_color_gradient(low = "#984ea3" ,high = "#984ea3",na.value = ncicolpal[8])+
   scale_x_continuous(breaks = pretty_breaks(n = 7))+
   ggrepel::geom_text_repel(aes(label=label),size=3.5,nudge_y = 0.4)+
   theme_ipsum_rc(axis_title_just = 'm',axis_title_size = 14,grid_col = 'gray85',plot_title_size = 15,plot_margin=margin(5.5,5.5,5.5,5.5))+
@@ -803,7 +825,7 @@ plotdata %>%
   guides(color="none")+
   panel_border(color = 'black',linetype = 1)
 
-ggsave(filename = 'LCINS_passive_smoking_SBS_multivariable.pdf',width = 7,height = 5,device = cairo_pdf)
+ggsave(filename = 'LCINS_passive_smoking_SBS_multivariable.pdf',plot = p,width = 7,height = 5,device = cairo_pdf)
 
 # 3d 
 plotdata <- tdata %>% 
@@ -816,14 +838,14 @@ plotdata <- tdata %>%
 plotdata$term
 plotdata$term <-  c('Age','Ethnicity: EAS\nRef=EUR', 'Ethnicity: Others\nRef=EUR','Sex: Female\nRef=Male','Histology: Carcinoid Tumor\nRef=LUAD','Histology: Others\nRef=LUAD','Histology: LUSC\nRef=LUAD','Passive Smoking: Yes\nRef=No','Tumor Purity')
 
-plotdata %>% 
+p <- plotdata %>% 
   mutate(term=fct_reorder(term,estimate)) %>% 
-  mutate(p.value = if_else(p.value>0.05,NA,p.value)) %>% 
-  ggplot(aes(estimate, term, xmin = conf.low, xmax = conf.high, height = 0,color=-log10(p.value))) +
+  #mutate(p.value = if_else(p.value>0.05,NA,p.value)) %>% 
+  mutate(p.value = if_else(str_detect(term, 'Passive'),p.value,NA)) %>%   ggplot(aes(estimate, term, xmin = conf.low, xmax = conf.high, height = 0,color=-log10(p.value))) +
   geom_vline(xintercept = 0, lty = 5) +
   geom_errorbarh(height = .3)+
   geom_point(pch=19,size=4) +
-  scale_color_gradient(low = "#EE5250FF" ,high = "#B71B1BFF",na.value = ncicolpal[8])+
+  scale_color_gradient(low = "#984ea3" ,high = "#984ea3",na.value = ncicolpal[8])+
   scale_x_continuous(breaks = pretty_breaks(n = 7))+
   ggrepel::geom_text_repel(aes(label=label),size=3.5,nudge_y = 0.4)+
   theme_ipsum_rc(axis_title_just = 'm',axis_title_size = 14,grid_col = 'gray85',plot_title_size = 15,plot_margin=margin(5.5,5.5,5.5,5.5))+
@@ -832,7 +854,7 @@ plotdata %>%
   guides(color="none")+
   panel_border(color = 'black',linetype = 1)
 
-ggsave(filename = 'LCINS_passive_smoking_telomere_multivariable.pdf',width = 7,height = 5,device = cairo_pdf)
+ggsave(filename = 'LCINS_passive_smoking_telomere_multivariable.pdf',plot = p,width = 7,height = 5,device = cairo_pdf)
 
 
 # Figure 3e ---------------------------------------------------------------
@@ -970,8 +992,6 @@ ggsave(filename = 'LCINS_passive_smoking_driver_mutations.pdf',width = 6,height 
 
 
 # Figure 4 ----------------------------------------------------------------
-
-
 tdata <- bind_rows(
   sherlock_sbs96_profile %>% mutate(Profile='SBS'),
   sherlock_dbs78_profile %>% mutate(Profile='DBS'),
@@ -1014,7 +1034,7 @@ plotdata %>%
   scale_fill_manual(values = c('#01665e','#BB0E3D'))+
   scale_y_continuous(breaks = pretty_breaks())+
   theme_ipsum_rc(base_size = 13,axis_title_just = 'm',axis_title_size = 15,plot_margin=margin(5.5,5.5,5.5,5.5),plot_title_size = 15,ticks = T)+
-  labs(x = expression("Pollution group (Population weighted PM"[2.5]*")"), y = 'Total number of mutations (log)')+
+  labs(x = expression("Pollution group (Population weighted PM"[2.5]*")"), y = 'Total number of mutations (log10)')+
   theme(plot.title = element_text(hjust = 0.5),strip.text.x = element_text(size=14,face = 'bold',hjust = 0.5),panel.spacing = unit(0.4,'cm'))+
   guides(fill="none")+
   panel_border(color = 'black',linetype = 1)+
@@ -1070,15 +1090,16 @@ plotdata <- plotdata %>%
 plotdata$term
 plotdata$term <-  rep(c('Age','Ethnicity: EAS\nRef=EUR', 'Ethnicity: Others\nRef=EUR','Sex: Female\nRef=Male','Histology: Carcinoid Tumor\nRef=LUAD','Histology: Others\nRef=LUAD','Histology: LUSC\nRef=LUAD','Pollution Group: High\nRef=Low','Tumor Purity'),each=3)
 
-plotdata %>% 
+p <- plotdata %>% 
   mutate(term=fct_reorder(term,estimate)) %>% 
-  mutate(p.value = if_else(p.value>0.05,NA,p.value)) %>% 
+  #mutate(p.value = if_else(p.value>0.05,NA,p.value)) %>% 
+  mutate(p.value = if_else(str_detect(term,'Pollution'),p.value,NA)) %>% 
   ggplot(aes(estimate, term, xmin = conf.low, xmax = conf.high, height = 0,color=-log10(p.value))) +
   geom_vline(xintercept = 0, lty = 5) +
   geom_errorbarh(height = .3)+
   geom_point(pch=19,size=3) +
   facet_wrap(~name,nrow = 1)+
-  scale_color_gradient(low = "#EE5250FF" ,high = "#B71B1BFF",na.value = ncicolpal[8])+
+  scale_color_gradient(low = "#B71B1BFF" ,high = "#B71B1BFF",na.value = ncicolpal[8])+ #"#EE5250FF"
   scale_x_continuous(breaks = pretty_breaks(n = 7))+
   ggrepel::geom_text_repel(aes(label=label),size=3.5,nudge_y = 0.4)+
   theme_ipsum_rc(axis_title_just = 'm',axis_title_size = 14,grid_col = 'gray85',plot_title_size = 15,plot_margin=margin(5.5,5.5,5.5,5.5))+
@@ -1087,7 +1108,7 @@ plotdata %>%
   guides(color="none")+
   panel_border(color = 'black',linetype = 1)
 
-ggsave(filename = 'LCINS_Pollution_mutations_multivariable.pdf',width = 14,height = 5,device = cairo_pdf)
+ggsave(filename = 'LCINS_Pollution_mutations_multivariable.pdf',plot = p,width = 14,height = 5,device = cairo_pdf)
 
 
 # Figure 4d ---------------------------------------------------------------
@@ -1105,14 +1126,15 @@ plotdata <- plotdata %>%
 plotdata$term
 plotdata$term <-  rep(c('Age','Ethnicity: EAS\nRef=EUR', 'Ethnicity: Others\nRef=EUR','Sex: Female\nRef=Male','Histology: Carcinoid Tumor\nRef=LUAD','Histology: Others\nRef=LUAD','Histology: LUSC\nRef=LUAD','Pollution Group: High\nRef=Low','Tumor Purity'),each=1)
 
-plotdata %>% 
+p <- plotdata %>% 
   mutate(term=fct_reorder(term,estimate)) %>% 
-  mutate(p.value = if_else(p.value>0.05,NA,p.value)) %>% 
+  #mutate(p.value = if_else(p.value>0.05,NA,p.value)) %>% 
+  mutate(p.value = if_else(str_detect(term,'Pollution'),p.value,NA)) %>% 
   ggplot(aes(estimate, term, xmin = conf.low, xmax = conf.high, height = 0,color=-log10(p.value))) +
   geom_vline(xintercept = 0, lty = 5) +
   geom_errorbarh(height = .3)+
   geom_point(pch=19,size=3) +
-  scale_color_gradient(low = "#EE5250FF" ,high = "#B71B1BFF",na.value = ncicolpal[8])+
+  scale_color_gradient(low = "#B71B1BFF" ,high = "#B71B1BFF",na.value = ncicolpal[8])+ #"#EE5250FF"
   scale_x_continuous(breaks = pretty_breaks(n = 7))+
   ggrepel::geom_text_repel(aes(label=label),size=3.5,nudge_y = 0.4)+
   theme_ipsum_rc(axis_title_just = 'm',axis_title_size = 14,grid_col = 'gray85',plot_title_size = 15,plot_margin=margin(5.5,5.5,5.5,5.5))+
@@ -1121,11 +1143,10 @@ plotdata %>%
   guides(color="none")+
   panel_border(color = 'black',linetype = 1)
 
-ggsave(filename = 'LCINS_Pollution_telomere_multivariable.pdf',width = 6,height = 5,device = cairo_pdf)
+ggsave(filename = 'LCINS_Pollution_telomere_multivariable.pdf',plot = p,width = 6,height = 5,device = cairo_pdf)
 
 
 # Figure 4e ---------------------------------------------------------------
-
 my_comparisons <- list(c("Low", "Intermediate"),c("Intermediate", "High"),c("Low", "High"))
 
 plotdata <- tdata %>% select(Tumor_Barcode,SBS,DBS,ID,Pollution_group3) %>% pivot_longer(cols = -c(Tumor_Barcode,Pollution_group3)) %>% filter(is.finite(value)) %>% 
@@ -1150,7 +1171,7 @@ plotdata %>%
   scale_fill_manual(values = pollution_colors)+
   scale_y_continuous(breaks = pretty_breaks())+
   theme_ipsum_rc(base_size = 13,axis_title_just = 'm',axis_title_size = 15,plot_margin=margin(5.5,5.5,5.5,5.5),plot_title_size = 15,ticks = T)+
-  labs(x = expression("Pollution group (Population weighted PM"[2.5]*")"), y = 'Total number of mutations (log)')+
+  labs(x = expression("Pollution group (Population weighted PM"[2.5]*")"), y = 'Total number of mutations (log10)')+
   theme(plot.title = element_text(hjust = 0.5),strip.text.x = element_text(size=14,face = 'bold',hjust = 0.5),panel.spacing = unit(0.4,'cm'))+
   guides(fill="none")+
   panel_border(color = 'black',linetype = 1)+
@@ -1160,7 +1181,6 @@ ggsave(filename = 'LCINS_Pollution_mutations2.pdf',width = 8 ,height =6,device =
 
 
 # Figure 4f ---------------------------------------------------------------
-
 plotdata <- tdata %>% select(Tumor_Barcode,Telseq_TL_Ratio,Pollution_group3) %>%  filter(!is.na(Telseq_TL_Ratio))
 
 stat.test <- plotdata %>% 
@@ -1218,7 +1238,7 @@ tdata_group %>%
   # scale_y_log10(breaks = trans_breaks("log10", function(x) 10^x),
   #               labels = trans_format("log10", math_format(10^.x))) +
   theme_ipsum_rc(axis_title_just = 'm',axis_title_size = 14,grid = FALSE,axis = 'XY',ticks = T,plot_margin=margin(5.5,5.5,5.5,5.5))+
-  labs(x = expression("Average population weighted PM"[2.5] ~ (mu*g/m^3)), y = 'Average number of SBS mutations',size='Number of samples')+
+  labs(x = expression("Average population weighted PM"[2.5] ~ (mu*g/m^3)), y = 'Average number of SBS mutations (log10)',size='Number of samples')+
   theme(legend.position = 'top',legend.key.width = unit(1,'cm'),legend.margin=margin(0,0,-12,0),legend.box.margin=margin(0,0,0,0))+
   panel_border(color = 'black',linetype = 1,size=0.5)+
   annotate("text",x=28,y=3,label=plabel,family= 'Roboto Condensed')
@@ -1257,7 +1277,7 @@ tdata_group %>%
   # scale_y_log10(breaks = trans_breaks("log10", function(x) 10^x),
   #               labels = trans_format("log10", math_format(10^.x))) +
   theme_ipsum_rc(axis_title_just = 'm',axis_title_size = 14,grid = FALSE,axis = 'XY',ticks = T,plot_margin=margin(5.5,5.5,5.5,5.5))+
-  labs(x = expression("Average population weighted PM"[2.5] ~ (mu*g/m^3)), y = 'Average number of DBS mutations',size='Number of samples')+
+  labs(x = expression("Average population weighted PM"[2.5] ~ (mu*g/m^3)), y = 'Average number of DBS mutations (log10)',size='Number of samples')+
   theme(legend.position = 'top',legend.key.width = unit(1,'cm'),legend.margin=margin(0,0,-12,0),legend.box.margin=margin(0,0,0,0))+
   panel_border(color = 'black',linetype = 1,size=0.5)+
   annotate("text",x=28,y=0.5,label=plabel,family= 'Roboto Condensed')
@@ -1297,7 +1317,7 @@ tdata_group %>%
   # scale_y_log10(breaks = trans_breaks("log10", function(x) 10^x),
   #               labels = trans_format("log10", math_format(10^.x))) +
   theme_ipsum_rc(axis_title_just = 'm',axis_title_size = 14,grid = FALSE,axis = 'XY',ticks = T,plot_margin=margin(5.5,5.5,5.5,5.5))+
-  labs(x = expression("Average population weighted PM"[2.5] ~ (mu*g/m^3)), y = 'Average number of ID mutations',size='Number of samples')+
+  labs(x = expression("Average population weighted PM"[2.5] ~ (mu*g/m^3)), y = 'Average number of ID mutations (log10)',size='Number of samples')+
   theme(legend.position = 'top',legend.key.width = unit(1,'cm'),legend.margin=margin(0,0,-12,0),legend.box.margin=margin(0,0,0,0))+
   panel_border(color = 'black',linetype = 1,size=0.5)+
   annotate("text",x=28,y=1.55,label=plabel,family= 'Roboto Condensed')
@@ -1416,22 +1436,26 @@ plotdata <- ludmil_activity_all_obs %>%
 
 plotdata$term
 plotdata$term <-  rep(c('Age','Ethnicity: EAS\nRef=EUR', 'Ethnicity: Others\nRef=EUR','Sex: Female\nRef=Male','Histology: Carcinoid Tumor\nRef=LUAD','Histology: Others\nRef=LUAD','Histology: LUSC\nRef=LUAD','PM[2.5] ~ mu*g/m^3','Tumor Purity'),each=3)
+
+plotdata$term <-  rep(c('Age','Ethnicity: EAS\nRef=EUR', 'Ethnicity: Others\nRef=EUR','Sex: Female\nRef=Male','Histology: Carcinoid Tumor\nRef=LUAD','Histology: Others\nRef=LUAD','Histology: LUSC\nRef=LUAD',"PM~2~.~5~ 10 μg/m^3^",'Tumor Purity'),each=3)
+
 termlevel <- plotdata %>% filter(name=='SBS4') %>% arrange(estimate) %>% pull(term)
 p <- plotdata %>% 
   mutate(term=factor(term,levels=termlevel)) %>% 
   mutate(name=factor(name,levels=c('SBS4','SBS5','ID3'))) %>% 
-  mutate(p.value = if_else(p.value>0.05,NA,p.value)) %>% 
+  #mutate(p.value = if_else(p.value>0.05,NA,p.value)) %>% 
+  mutate(p.value = if_else(str_detect(term,'PM'),p.value,NA)) %>% 
   ggplot(aes(log2(estimate), term, xmin = log2(conf.low), xmax = log2(conf.high), height = 0,color=-log10(p.value))) +
   geom_vline(xintercept = 0, lty = 5) +
   geom_errorbarh(height = .3)+
   geom_point(pch=19,size=3) +
   facet_wrap(~name,nrow = 1)+
-  scale_color_gradient(low = "#EE5250FF" ,high = "#B71B1BFF",na.value = ncicolpal[8])+
+  scale_color_gradient( low = "#B71B1BFF",high = "#B71B1BFF",na.value = ncicolpal[8])+ #low = "#EE5250FF"
   scale_x_continuous(breaks = pretty_breaks(n = 7))+
   #scale_y_discrete(labels = parse_format())+
   ggrepel::geom_text_repel(aes(label=label),size=3.5,nudge_y = 0.4)+
   theme_ipsum_rc(axis_title_just = 'm',axis_title_size = 14,grid_col = 'gray85',plot_title_size = 15,plot_margin=margin(5.5,5.5,5.5,5.5))+
-  theme(panel.spacing = unit(0.3,"cm"),plot.title = element_text(hjust = 0.5),strip.text.x = element_text(face = 'bold',hjust = 0.5))+
+  theme(panel.spacing = unit(0.3,"cm"),plot.title = element_text(hjust = 0.5),strip.text.x = element_text(face = 'bold',hjust = 0.5),axis.text.y = element_markdown())+
   labs(x =  expression("Odd ratio (log2) PM" [2.5] * 10 ~ mu*g/m^3), y = NULL)+
   guides(color="none")+
   panel_border(color = 'black',linetype = 1)
@@ -1475,7 +1499,7 @@ tdata_group %>%
   # scale_y_log10(breaks = trans_breaks("log10", function(x) 10^x),
   #               labels = trans_format("log10", math_format(10^.x))) +
   theme_ipsum_rc(axis_title_just = 'm',axis_title_size = 14,grid = FALSE,axis = 'XY',ticks = T,plot_margin=margin(5.5,5.5,5.5,5.5))+
-  labs(x = expression("Average population weighted PM"[2.5] ~ (mu*g/m^3)), y = 'Average number of SBS4 mutations',size='Number of samples')+
+  labs(x = expression("Average population weighted PM"[2.5] ~ (mu*g/m^3)), y = 'Average number of SBS4 mutations (log10)',size='Number of samples')+
   theme(legend.position = 'top',legend.key.width = unit(1,'cm'),legend.margin=margin(0,0,-12,0),legend.box.margin=margin(0,0,0,0))+
   panel_border(color = 'black',linetype = 1,size=0.5)+
   annotate("text",x=25,y=2.8,label=plabel,family= 'Roboto Condensed')
@@ -1518,7 +1542,7 @@ tdata_group %>%
   # scale_y_log10(breaks = trans_breaks("log10", function(x) 10^x),
   #               labels = trans_format("log10", math_format(10^.x))) +
   theme_ipsum_rc(axis_title_just = 'm',axis_title_size = 14,grid = FALSE,axis = 'XY',ticks = T,plot_margin=margin(5.5,5.5,5.5,5.5))+
-  labs(x = expression("Average population weighted PM"[2.5] ~ (mu*g/m^3)), y = 'Average number of SBS5 mutations',size='Number of samples')+
+  labs(x = expression("Average population weighted PM"[2.5] ~ (mu*g/m^3)), y = 'Average number of SBS5 mutations (log10)',size='Number of samples')+
   theme(legend.position = 'top',legend.key.width = unit(1,'cm'),legend.margin=margin(0,0,-12,0),legend.box.margin=margin(0,0,0,0))+
   panel_border(color = 'black',linetype = 1,size=0.5)+
   annotate("text",x=28,y=2.7,label=plabel,family= 'Roboto Condensed')
@@ -1563,7 +1587,7 @@ tdata_group %>%
   # scale_y_log10(breaks = trans_breaks("log10", function(x) 10^x),
   #               labels = trans_format("log10", math_format(10^.x))) +
   theme_ipsum_rc(axis_title_just = 'm',axis_title_size = 14,grid = FALSE,axis = 'XY',ticks = T,plot_margin=margin(5.5,5.5,5.5,5.5))+
-  labs(x = expression("Average population weighted PM"[2.5] ~ (mu*g/m^3)), y = 'Average number of ID3 mutations',size='Number of samples')+
+  labs(x = expression("Average population weighted PM"[2.5] ~ (mu*g/m^3)), y = 'Average number of ID3 mutations (log10)',size='Number of samples')+
   theme(legend.position = 'top',legend.key.width = unit(1,'cm'),legend.margin=margin(0,0,-12,0),legend.box.margin=margin(0,0,0,0))+
   panel_border(color = 'black',linetype = 1,size=0.5)+
   annotate("text",x=13,y=2.5,label=plabel,family= 'Roboto Condensed')
