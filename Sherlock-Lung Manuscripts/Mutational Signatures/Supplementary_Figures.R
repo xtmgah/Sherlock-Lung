@@ -66,15 +66,13 @@ ggsave(filename = 'HRDetect_vs_chord3.pdf',width = 8,height = 5,device = cairo_p
 
 #dens <- density(pollution_data$PM25)
 
-
-
 mdata <- read_delim('~/NIH-Work/EAGLE_NSLC/SecondPaper/Mutational_Signature_Manuscript/Code_and_Data_Sherlock_mutational_signatures_manuscript_2024FEB8/Met_Pol_TMB_PGA_Sigs_SBS_ID_DBS_CN_SV_2024FEB7.tsv',delim = '\t',col_names = T)
 
 dens <- density(mdata$Population.Weighted.PM2.5.ug.m3,na.rm = T)
 df <- data.frame(x=dens$x, y=dens$y)
-probs <- c(0.25,0.5,0.75)
+probs <- c(0,0.2,0.4,0.5,0.6,0.8,1)
 quantiles <- quantile(mdata$Population.Weighted.PM2.5.ug.m3, prob=probs,na.rm = T)
-df$quant <- factor(findInterval(df$x,quantiles))
+df$quant <- factor(findInterval(df$x,quantiles[c(2,4,6)]))
 
 tmp <- df %>% group_by(quant) %>% slice(1) %>% ungroup() %>% slice(2:4)
 tmp

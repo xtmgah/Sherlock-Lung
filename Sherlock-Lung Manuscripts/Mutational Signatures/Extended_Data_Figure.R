@@ -241,16 +241,16 @@ ggsave(filename = 'cn68_signature_denovo_nonsmoker.pdf',p,width = 24,height = 8,
 # 4b ----------------------------------------------------------------------
 cn68_denovo_mapping_detail_nonsmoker %>% 
   mutate(de_novo_extracted = toupper(de_novo_extracted)) %>% 
-  mutate(cosmic_signature = factor(cosmic_signature,levels=names(sigcol))) %>% 
+  mutate(cosmic_signature = factor(cosmic_signature,levels=colnames(cn68_activity))) %>% 
   ggplot(aes(de_novo_extracted,contribution,fill=cosmic_signature))+
   geom_col( position = 'fill')+
-  scale_fill_manual(values = sigcol)+
+  scale_fill_npg()+
   geom_text(aes(label = paste0(cosmic_signature,"\n",percent_format(accuracy = 0.1)(contribution))), position = position_fill(vjust = .5),size=3)+
   theme_ipsum_rc(grid = FALSE)+
   theme(axis.title.x = element_blank(),axis.title.y = element_blank(),axis.text.y = element_blank(),axis.text.x = element_text(angle = 45))+
   guides(fill = guide_legend(title = 'Cosmic Signatures',ncol = 1,title.position = 'top'))
 
-ggsave(filename = 'Denovo_sig_mapping_id83.pdf',width = 7,height = 6,device = cairo_pdf)
+ggsave(filename = 'Denovo_sig_mapping_cn68.pdf',width = 4,height = 6,device = cairo_pdf)
 
 
 # 4c ----------------------------------------------------------------------
@@ -289,18 +289,18 @@ p <- plot_grid(pa,pb,pc,pd,align = 'h',ncol = 2)
 ggsave(filename = 'sv38_signature_denovo_nonsmoker.pdf',p,width = 24,height = 8,device = cairo_pdf)
 
 # 5b ----------------------------------------------------------------------
-cn68_denovo_mapping_detail_nonsmoker %>% 
+sv38_denovo_mapping_detail_nonsmoker %>% 
   mutate(de_novo_extracted = toupper(de_novo_extracted)) %>% 
-  mutate(cosmic_signature = factor(cosmic_signature,levels=names(sigcol))) %>% 
+  mutate(cosmic_signature = factor(cosmic_signature,levels=colnames(sv38_activity))) %>% 
   ggplot(aes(de_novo_extracted,contribution,fill=cosmic_signature))+
   geom_col( position = 'fill')+
-  scale_fill_manual(values = sigcol)+
+  scale_fill_jama()+
   geom_text(aes(label = paste0(cosmic_signature,"\n",percent_format(accuracy = 0.1)(contribution))), position = position_fill(vjust = .5),size=3)+
   theme_ipsum_rc(grid = FALSE)+
   theme(axis.title.x = element_blank(),axis.title.y = element_blank(),axis.text.y = element_blank(),axis.text.x = element_text(angle = 45))+
   guides(fill = guide_legend(title = 'Cosmic Signatures',ncol = 1,title.position = 'top'))
 
-ggsave(filename = 'Denovo_sig_mapping_id83.pdf',width = 7,height = 6,device = cairo_pdf)
+ggsave(filename = 'Denovo_sig_mapping_sv38.pdf',width = 4,height = 6,device = cairo_pdf)
 
 
 # 5c ----------------------------------------------------------------------
@@ -1975,7 +1975,7 @@ p <- plotdata %>%
 
 ggsave(filename = 'LCINS_Pollution_mutations_multivariable_others.pdf',plot = p,width = 12,height = 5,device = cairo_pdf)
 
-# Figure 19c ---------------------------------------------------------------
+#19c ---------------------------------------------------------------
 testdata <- ludmil_activity_all_obs %>%
   pivot_longer(-Tumor_Barcode) %>% 
   mutate(Profile=str_remove_all(name,"[0-9a-z]")) %>% 
@@ -2021,6 +2021,74 @@ testdata %>%
   coord_cartesian(clip = 'off')
 
 ggsave(filename = 'LCINS_pollution_signature_enrichment_others.pdf',width = 7,height = 4,device = cairo_pdf)
+
+
+
+# ED_Figure 20 ------------------------------------------------------------
+library(rstatix)
+library(ggbeeswarm)
+tdata1 <- read_delim('../Data_from_Marcos/Extended_Data_Figure_20_Data_and_Code/Mouse_Data_Assignment_Solution_Activities_SPA_using_Sherlock_LCINS_signatures_mm10.txt',delim = '\t',col_names = T)
+tdata2 <- read_delim('../Data_from_Marcos/Extended_Data_Figure_20_Data_and_Code/Mouse_Data_tn_tl_ratio.tsv',delim = '\t',col_names = T) %>% rename(Samples=sample)
+
+tdata <- left_join(tdata2,tdata1) %>% mutate(met=factor(met,levels=c('PBS','Pollution'),labels=c('Control','PM2.5 exposed')))
+my_comparisons <- list(c('Control','PM2.5 exposed'))
+
+
+# 20a ---------------------------------------------------------------------
+
+stat.test <- tdata %>% 
+  t_test(SBS5 ~ met, comparisons = my_comparisons) %>%
+  ungroup() %>% 
+  add_xy_position(x = "met") %>%
+  mutate(myformatted.p = sprintf("P = %.3f",p)) %>% 
+  mutate(met = "Control")
+
+stat.test
+mvalue <- tdata %>% group_by(met) %>% summarise(SBS5=mean(SBS5))
+
+tdata %>% 
+  ggplot(aes(met,SBS5,fill=met))+
+  geom_quasirandom(pch=21,size=4,width = 0.3,color="black",stroke=0.4)+
+  geom_boxplot(width=0.5,outlier.shape = NA,alpha =0.6,size=0.7)+
+  geom_point(data=mvalue,pch='x',size=4)+
+  scale_fill_manual(values = c('#01665e','#BB0E3D'))+
+  scale_y_continuous(breaks = pretty_breaks())+
+  theme_ipsum_rc(base_size = 13,axis_title_just = 'm',axis_title_size = 15,plot_margin=margin(5.5,5.5,5.5,5.5),plot_title_size = 15,ticks = T)+
+  labs(x = NULL, y = 'Total number of SBS5 mutations')+
+  theme(plot.title = element_text(hjust = 0.5),strip.text.x = element_text(size=14,face = 'bold',hjust = 0.5),panel.spacing = unit(0.4,'cm'))+
+  guides(fill="none")+
+  panel_border(color = 'black',linetype = 1)+
+  stat_pvalue_manual(stat.test, label = "myformatted.p")
+
+ggsave(filename = 'mouse_data_sbs5.pdf',width = 3,height = 5,device = cairo_pdf)
+
+# 20b ---------------------------------------------------------------------
+
+stat.test <- tdata %>% 
+  t_test(tn_tl_ratio_log2 ~ met, comparisons = my_comparisons) %>%
+  ungroup() %>% 
+  add_xy_position(x = "met") %>%
+  mutate(myformatted.p = sprintf("P = %.2f",p)) %>% 
+  mutate(met = "Control")
+
+stat.test
+mvalue <- tdata %>% group_by(met) %>% summarise(tn_tl_ratio_log2=mean(tn_tl_ratio_log2))
+
+tdata %>% 
+  ggplot(aes(met,tn_tl_ratio_log2,fill=met))+
+  geom_quasirandom(pch=21,size=4,width = 0.3,color="black",stroke=0.4)+
+  geom_boxplot(width=0.5,outlier.shape = NA,alpha =0.6,size=0.7)+
+  geom_point(data=mvalue,pch='x',size=4)+
+  scale_fill_manual(values = c('#01665e','#BB0E3D'))+
+  scale_y_continuous(breaks = pretty_breaks())+
+  theme_ipsum_rc(base_size = 13,axis_title_just = 'm',axis_title_size = 15,plot_margin=margin(5.5,5.5,5.5,5.5),plot_title_size = 15,ticks = T)+
+  labs(x = NULL, y = 'T/N telomere length ratio (log2)')+
+  theme(plot.title = element_text(hjust = 0.5),strip.text.x = element_text(size=14,face = 'bold',hjust = 0.5),panel.spacing = unit(0.4,'cm'))+
+  guides(fill="none")+
+  panel_border(color = 'black',linetype = 1)+
+  stat_pvalue_manual(stat.test, label = "myformatted.p")
+
+ggsave(filename = 'mouse_data_telomere.pdf',width = 3,height = 5,device = cairo_pdf)
 
 
 # ED_Figure 21 ------------------------------------------------------------
