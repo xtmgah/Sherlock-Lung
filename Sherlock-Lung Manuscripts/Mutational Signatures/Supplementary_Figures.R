@@ -95,3 +95,82 @@ annotate("text",x=tmp$x[3],y=0,label='Split in 3 groups (intermediate-high)',ang
 ggsave(filename = 'Pollution_groups.pdf',width = 6,height = 5,device = cairo_pdf)
 
 
+df$quant <- factor(findInterval(df$x,quantiles[c(4)]))
+tmp <- df %>% group_by(quant) %>% slice(1) %>% ungroup() %>% slice(2)
+tmp
+
+ggplot(df, aes(x,y)) + 
+  geom_line(col='black') + 
+  geom_area(aes(fill=quant)) +
+  geom_segment(data = tmp,aes(x=x,xend=x,y=0,yend=y),col='white')+
+  scale_x_continuous(breaks = pretty_breaks(n=7),expand = c(0,0))+
+  scale_y_continuous(breaks = pretty_breaks(n=7),expand = expansion(add=c(0,0.005)))+
+  scale_fill_manual(values = c(c('#01665e','#BB0E3D')))+
+  annotate("text",x=tmp$x[1],y=0,label='Split in 2 groups (low-high)',angle=90,hjust=-0.05,vjust=1.5,col='white')+
+  theme_ipsum_rc(base_size = 12,axis_title_just = 'm',axis_title_size = 14,grid = 'Yy',ticks = T,plot_margin=margin(5.5,5.5,5.5,5.5))+
+  guides(fill="none")+
+  labs(x=expression("Average population weighted PM"[2.5] ~ (mu*g/m^3)),y="Sample density")+
+  panel_border(color = 'black',linetype = 1,size=0.5)
+
+ggsave(filename = 'Pollution_groups2.pdf',width = 6,height = 5,device = cairo_pdf)
+
+
+
+# TMB vs EGFR in the context of TP53 mutations ----------------------------
+library(ggbeeswarm)
+library(rstatix)
+
+load('../../RDS/sherlock_variable.RData')
+load('../../RDS/sherlock_data_all.RData')
+
+my_comparisons <- list(c("No", "Yes"))
+
+tdata <- sherlock_data_full %>%
+  filter(Gene %in% c('EGFR','TP53'), Type=='Mutation_Driver') %>% 
+  mutate(Alteration = if_else(Alteration == 'Yes','Mutant','Wild-type')) %>% 
+  mutate(Alteration = factor(Alteration,levels=c('Wild-type','Mutant'))) %>% 
+  pivot_wider(names_from = Gene,values_from = Alteration) %>% 
+  mutate(TP53=factor(TP53,labels =c('TP53 Wild-type','TP53 Mutant'))) %>% 
+  left_join(
+    sherlock_variable %>% filter(name == 'TMB') %>% pivot_wider()
+  ) %>% 
+  mutate(TMB=log2(TMB)) %>% 
+  filter(Tumor_Barcode %in% luad_nonsmoker ) %>% 
+  left_join(covdata0)
+
+tdata %>% group_by(TP53) %>% do(tidy(lm(TMB ~ EGFR + Tumor_Purity + Assigned_Population + Gender + Age, data=.)))
+  
+stat.test <- tdata %>% 
+  group_by(TP53) %>% 
+  wilcox_test(TMB ~ EGFR, comparisons = my_comparisons) %>%
+  add_xy_position(x = "EGFR") %>%
+  mutate(myformatted.p = sprintf("P = %.2e",p)) %>% 
+  mutate(EGFR = NA)
+
+stat.test$myformatted.p <- c("q-value = 1.15e-04", "q-value = 0.15")
+
+tdata %>% 
+  ggplot(aes(EGFR,TMB,fill=EGFR))+
+  geom_quasirandom(pch=21,size=2,width = 0.3,color="white",stroke=0.5)+
+  geom_boxplot(width=0.5,outlier.shape = NA,alpha =0.6,size=0.7)+
+  scale_fill_jama()+
+  scale_y_continuous(breaks = pretty_breaks())+
+  facet_wrap(~TP53)+
+  theme_ipsum_rc(base_size = 13,axis_title_just = 'm',axis_title_size = 15,plot_margin=margin(5.5,5.5,5.5,5.5),plot_title_size = 15,ticks = T)+
+  labs(x = "EGFR mutation status", y = 'Tumor mutational burden (log2)')+
+  theme(plot.title = element_text(hjust = 0.5),strip.text.x = element_text(face = 'bold',hjust = 0.5))+
+  guides(fill="none")+
+  panel_border(color = 'black',linetype = 1)+
+  stat_pvalue_manual(stat.test, label = "myformatted.p")
+
+ggsave(filename = 'LCINS_EGFR_TMB.pdf',width = 4 ,height =6,device = cairo_pdf)  
+
+
+
+# Save object for Macros --------------------------------------------------
+
+hrdetect_result <- hrdetect_result %>% filter(Tumor_Barcode %in% sherlock_nonsmoker)
+chord_output <- chord_output %>% filter(sample %in% sherlock_nonsmoker)
+mdata
+
+save(mdata,hrdetect_result, chord_output,sherlock_nonsmoker, file='Supplementary_Figures.RData')

@@ -7,7 +7,8 @@ source('/Users/zhangt8/NIH-Work/MutationSignature/mSigPortal/CBIIT/mSigPortal/Co
 source('~/NIH-Work/R/ZTW_function/ztw.R')
 
 
-# load common data files 
+
+# load common data files  -------------------------------------------------
 load('../../BBsolution_final3_short.RData')
 load('../../sp_group_data.RData')
 load('../../covdata0.RData')
@@ -27,13 +28,16 @@ load('../sampleset.RData')
 load('../sigcol.RData')
 
 drglist <- readRDS('../../../../Collaborators/Nuria/Update2/drivers_intogene.RDS') %>% pull(symbol)
-drglist <- sherlock_driver_mutations %>% filter(Hugo_Symbol %in% drglist,Tumor_Barcode %in% sherlock_nonsmoker) %>% select(Hugo_Symbol,Tumor_Barcode) %>% unique() %>% count(Hugo_Symbol) %>% filter(n>2) %>% pull(Hugo_Symbol)
-
+drglist <- sherlock_driver_mutations %>% filter(Hugo_Symbol %in% drglist,Tumor_Barcode %in% sherlock_nonsmoker) %>% select(Hugo_Symbol,Tumor_Barcode) %>% unique() %>% count(Hugo_Symbol) %>% mutate(freq=n/length(sherlock_nonsmoker)) %>% filter(freq>0.02) %>% pull(Hugo_Symbol)
 
 #The presence of a specific signature was considered for the enrichment analysis (or the dichotomization of values above and below the median of assigned mutations, if the signature was present in above 50% of the samples). 
-ludmil_activity_all <- ludmil_activity_all %>% left_join(cn68_activity) %>% left_join(sv38_activity) %>% mutate_all(~replace_na(., 0L))
+ludmil_activity_all <- ludmil_activity_all %>% left_join(cn68_activity) %>% left_join(sv38_activity) %>% mutate_all(~replace_na(., 0L)) %>% filter(Tumor_Barcode %in% sherlock_nonsmoker)
 
-ludmil_activity_all <- ludmil_activity_all %>% filter(Tumor_Barcode %in% sherlock_nonsmoker)
+# remove signature not present in non-smokers
+exclude_sigs <- ludmil_activity_all %>% pivot_longer(-Tumor_Barcode) %>% group_by(name) %>% summarise(value=sum(value)) %>% filter(value==0) %>% pull(name)
+ludmil_activity_all <- ludmil_activity_all %>% select(-one_of(exclude_sigs))
+
+
 ludmil_activity_all_obs1 <- ludmil_activity_all %>% mutate(across(where(is.numeric),~ . > 0))
 tmpcolnames <- colnames(ludmil_activity_all_obs1)
 excludesigs <- ludmil_activity_all_obs1 %>% pivot_longer(-Tumor_Barcode) %>% mutate(value=if_else(is.na(value),FALSE,value)) %>% count(name,value) %>% filter(value) %>% arrange(n) %>% filter(n==1) %>% pull(name)
@@ -50,9 +54,6 @@ ludmil_activity_all_obs <- left_join(
   select(one_of(tmpcolnames))
 
 ludmil_activity_all_obs
-
-
-
 
 
 # load pollution data
@@ -73,7 +74,27 @@ pollution_colors <- c('#01665e','#947100','#BB0E3D')
 names(pollution_colors) <- c('Low','Intermediate','High')
 
 
+# define the geographical regions
+pollution_data %>% select(Tumor_Barcode, Country) %>% left_join(wgs_groups_info %>% select(Tumor_Barcode,Assigned_Population)) %>% count(Country,Assigned_Population)
 
+East <- c("Hong Kong","Korea","Philippines","Taiwan")
+Unknown <- c('Azerbaijan','Tunisia','Uzbekistan')
+
+country_group <- pollution_data %>% 
+  select(Tumor_Barcode,Country) %>% 
+  mutate(Country_Group=case_when(
+    Country %in% East ~ 'AS',
+    Country %in% Unknown ~ 'Other',
+    is.na(Country) ~ 'Other',
+    TRUE ~ 'NA/EU'
+  ))
+
+# remove the EAS Canada 
+country_group2 <- country_group %>% 
+  left_join(
+    wgs_groups_info %>% select(Tumor_Barcode,Assigned_Population)
+  ) %>% 
+  filter(!(Country == 'Canada_Ontario' & Assigned_Population == 'AS')) 
 
 # ED_Figure 1 -------------------------------------------------------------
 
@@ -81,7 +102,6 @@ names(pollution_colors) <- c('Low','Intermediate','High')
 
 
 # 1b ----------------------------------------------------------------------
-
 sbs288_denovo_mapping_detail_nonsmoker %>% 
   mutate(cosmic_signature = factor(cosmic_signature,levels=names(sigcol))) %>% 
   ggplot(aes(de_novo_extracted,contribution,fill=cosmic_signature))+
@@ -265,7 +285,7 @@ tdata <- cn68_denovo_activity_nonsmoker %>%
 
 sgroupcol <- ncicolpal[1:4]
 names(sgroupcol) <- c('Squamous cell carcinoma','Other','Carcinoid tumor','Adenocarcinoma')
-p <- TMBplot2(tdata,sgroupcol = sgroupcol,ylab = 'Number of ID mutations (log10)')+ theme(axis.text.x.bottom = element_text(size = 10,angle = 45,hjust = 1,vjust = 1))
+p <- TMBplot2(tdata,sgroupcol = sgroupcol,ylab = 'Number of CN segments (log10)')+ theme(axis.text.x.bottom = element_text(size = 10,angle = 45,hjust = 1,vjust = 1))
 ggsave(file='Denovo_sig_TMB_CN68.pdf',width = 3,height = 5,device = cairo_pdf)
 
 
@@ -328,13 +348,14 @@ testdata <- ludmil_activity_all_obs %>%
   select(Tumor_Barcode,!starts_with('SBS')) %>% 
   pivot_longer(-Tumor_Barcode) %>% 
   left_join(covdata0) %>% 
-  filter(Tumor_Barcode %in% luad_nonsmoker,Assigned_Population %in% c('EAS','EUR')) %>% 
-  mutate(Assigned_Population = factor(Assigned_Population, levels=c('EAS','EUR'))) %>% 
+  left_join(country_group) %>% 
+  filter(Tumor_Barcode %in% luad_nonsmoker,Country_Group %in% c('AS','NA/EU')) %>% 
+  mutate(Country_Group = factor(Country_Group, levels=c('AS','NA/EU'))) %>% 
   group_by(name) %>% 
   #do(tidy(fisher.test(.$value,.$Assigned_Population)))
   mutate(value=as.factor(value)) %>% 
   #do(tresult = safely(stats::fisher.test)(.$value,.$Assigned_Population)) %>% 
-  do(tresult = safely(stats::glm)(value ~ Assigned_Population + Gender + Age + Tumor_Purity,family = binomial(),data=.)) %>% 
+  do(tresult = safely(stats::glm)(value ~ Country_Group + Gender + Age + Tumor_Purity,family = binomial(),data=.)) %>% 
   mutate(tresult_null = map_lgl(tresult['result'], is.null)) %>% 
   filter(!tresult_null) %>% 
   mutate(fit = list(tidy(tresult[['result']],exponentiate=TRUE))) %>% 
@@ -342,14 +363,14 @@ testdata <- ludmil_activity_all_obs %>%
   unnest(cols = c(fit)) %>% 
   ungroup() %>% 
   arrange(p.value) %>% 
-  filter(term=='Assigned_PopulationEUR') %>% 
+  filter(term=='Country_GroupNA/EU') %>% 
   filter(abs(log(estimate))<10) %>% 
   mutate(profile=str_remove_all(name,'[:digit:].*')) %>% 
   group_by(profile) %>% 
   mutate(FDR=p.adjust(p.value,method='BH')) %>% 
   ungroup() %>% 
   mutate(profile=factor(profile,levels=c('DBS','ID','CN','SV'),labels= c('DBS Signatures','ID Signatures','CN Signatures','SV Signatures'))) %>% 
-  mutate(dir=if_else(estimate>1,'Enriched in EUR ancestry','Enriched in EAS ancestry'))
+  mutate(dir=if_else(estimate>1,'Enriched in NA/EU','Enriched in AS'))
 
 testdata %>% 
   ggplot(aes(log2(estimate),-log10(FDR),fill=dir))+
@@ -361,7 +382,7 @@ testdata %>%
   facet_wrap(~profile,nrow = 1)+
   scale_fill_nejm()+
   # scale_x_continuous(breaks = pretty_breaks(n = 7),limits = c(-4.05,4.05))+
-  scale_y_continuous(breaks = pretty_breaks(n=5),limits = c(0,4))+
+  scale_y_continuous(breaks = pretty_breaks(n=5),limits = c(0,6.6))+
   theme_ipsum_rc(base_size = 12,axis_title_just = 'm',axis_title_size = 12,grid = F,ticks = T,plot_margin=margin(5.5,5.5,5.5,5.5))+
   theme(panel.spacing.x = unit('0.25','cm'),strip.text.x = element_text(face = 'bold',hjust = 0.5),legend.position = 'bottom')+
   labs(x = 'Odd ratio (log2)', y = '-log10(FDR)',fill='Enrichment')+
@@ -372,20 +393,68 @@ ggsave(filename = 'LCINS_LUAD_otherSigs_Ancestry_association.pdf',width = 12,hei
 
 
 
-# 6b ----------------------------------------------------------------------
+# 6b-d ----------------------------------------------------------------------
 source('../../Sherlock_functions.R')
 plotdata <- sherlock_data_full %>% 
   filter(Gene %in% c('TP53','KRAS','EGFR'), Type=='Mutation_Driver') %>%
   left_join(covdata0) %>% 
-  filter(Tumor_Barcode %in% luad_nonsmoker,Assigned_Population %in% c('EAS','EUR')) %>% 
-  mutate(Assigned_Population = factor(Assigned_Population, levels=c('EAS','EUR'))) 
+  left_join(country_group) %>% 
+  filter(Tumor_Barcode %in% luad_nonsmoker,Country_Group %in% c('AS','NA/EU')) %>% 
+  mutate(Country_Group = factor(Country_Group, levels=c('AS','NA/EU'))) 
 
-barplot_fisher(plotdata %>% filter(Gene=='EGFR'),'Assigned_Population','Alteration',var1lab =  expression("Ancestry"),var2lab = 'EGFR mutation status',filename = 'LCINS_LUAD_Ancestry_driver_EGFR.pdf')
+barplot_fisher(plotdata %>% filter(Gene=='EGFR'),'Country_Group','Alteration',var1lab =  expression("Geographical region"),var2lab = 'EGFR mutation status',filename = 'LCINS_LUAD_Ancestry_driver_EGFR.pdf')
 
-barplot_fisher(plotdata %>% filter(Gene=='TP53'),'Assigned_Population','Alteration',var1lab =  expression("Ancestry"),var2lab = 'TP53 mutation status',filename = 'LCINS_LUAD_Ancestry_driver_TP53.pdf')
+barplot_fisher(plotdata %>% filter(Gene=='TP53'),'Country_Group','Alteration',var1lab =  expression("Geographical region"),var2lab = 'TP53 mutation status',filename = 'LCINS_LUAD_Ancestry_driver_TP53.pdf')
 
-barplot_fisher(plotdata %>% filter(Gene=='KRAS'),'Assigned_Population','Alteration',var1lab =  expression("Ancestry"),var2lab = 'KRAS mutation status',filename = 'LCINS_LUAD_Ancestry_driver_KRAS.pdf')
+barplot_fisher(plotdata %>% filter(Gene=='KRAS'),'Country_Group','Alteration',var1lab =  expression("Geographical region"),var2lab = 'KRAS mutation status',filename = 'LCINS_LUAD_Ancestry_driver_KRAS.pdf')
 
+# 6e ----------------------------------------------------------------------
+testdata <- ludmil_activity_all_obs %>%
+  pivot_longer(-Tumor_Barcode) %>% 
+  left_join(covdata0) %>% 
+  left_join(
+    sherlock_data_full %>% filter(Gene=='EGFR',Type=='Mutation_Driver') %>% select(Tumor_Barcode,EGFR = Alteration) %>% mutate(EGFR = factor(EGFR,levels = c('No','Yes'),labels=c('Wild-type','Mutant')))) %>% 
+  filter(Tumor_Barcode %in% luad_nonsmoker) %>% 
+  group_by(name) %>% 
+  #do(tidy(fisher.test(.$value,.$Assigned_Population)))
+  mutate(value=as.factor(value)) %>% 
+  #do(tresult = safely(stats::fisher.test)(.$value,.$Assigned_Population)) %>% 
+  do(tresult = safely(stats::glm)(value ~ EGFR + Assigned_Population + Gender + Age + Tumor_Purity,family = binomial(),data=.)) %>% 
+  mutate(tresult_null = map_lgl(tresult['result'], is.null)) %>% 
+  filter(!tresult_null) %>% 
+  mutate(fit = list(tidy(tresult[['result']],exponentiate=TRUE))) %>% 
+  select(name,fit) %>% 
+  unnest(cols = c(fit)) %>% 
+  ungroup() %>% 
+  arrange(p.value) %>% 
+  filter(term=='EGFRMutant') %>% 
+  filter(abs(log(estimate))<10) %>% 
+  mutate(profile=str_remove_all(name,'[:digit:].*')) %>% 
+  group_by(profile) %>% 
+  mutate(FDR=p.adjust(p.value,method='BH')) %>% 
+  ungroup() %>% 
+  mutate(profile=factor(profile,levels=c('SBS','DBS','ID','CN','SV'),labels= c('SBS Signatures','DBS Signatures','ID Signatures','CN Signatures','SV Signatures'))) %>% 
+  mutate(dir=if_else(estimate>1,'Enriched in EGFR mutant','Enriched in EGFR wild-type')) %>% 
+  mutate(dir=fct_rev(fct_inorder(dir)))
+
+testdata %>% 
+  ggplot(aes(log2(estimate),-log10(FDR),fill=dir))+
+  geom_hline(yintercept = -log10(0.05),col=ncicolpal[2],linetype=2)+
+  geom_hline(yintercept = -log10(0.01),col=ncicolpal[1],linetype=2)+
+  geom_vline(xintercept = 0,col="gray10",linetype=1,linewidth=0.5)+
+  geom_point(pch=21,size=3.5,col='white',stroke=0.2)+
+  ggrepel::geom_text_repel(data=testdata %>% filter(p.value<0.05),aes(label=name))+
+  facet_wrap(~profile,nrow = 1)+
+  scale_fill_nejm()+
+  # scale_x_continuous(breaks = pretty_breaks(n = 7),limits = c(-4.05,4.05))+
+  scale_y_continuous(breaks = pretty_breaks(n=5))+
+  theme_ipsum_rc(base_size = 12,axis_title_just = 'm',axis_title_size = 12,grid = F,ticks = T,plot_margin=margin(5.5,5.5,5.5,5.5))+
+  theme(panel.spacing.x = unit('0.25','cm'),strip.text.x = element_text(face = 'bold',hjust = 0.5),legend.position = 'bottom')+
+  labs(x = 'Odd ratio (log2)', y = '-log10(FDR)',fill='Enrichment')+
+  panel_border(color = 'black',linetype = 1,size=0.5)+
+  coord_cartesian(clip = 'off')
+
+ggsave(filename = 'LCINS_LUAD_Signatures_EGFR_association.pdf',width = 14,height = 4,device = cairo_pdf)
 
 
 # ED_Figure 7 -------------------------------------------------------------
@@ -478,7 +547,7 @@ plotdata %>%
   theme(panel.spacing.x = unit('0.25','cm'),strip.text.x = element_text(face = 'bold',hjust = 0.5),legend.position = 'top')+
   panel_border(color = 'black',size = 0.5)
 
-ggsave(filename = 'LCINSLUAD_DriverGene_Gender_association.pdf',width = 5,height = 4,device = cairo_pdf)
+ggsave(filename = 'LCINS_LUAD_DriverGene_Gender_association.pdf',width = 5,height = 4,device = cairo_pdf)
 
 
 # 7c ----------------------------------------------------------------------
@@ -499,8 +568,6 @@ barplot_fisher(plotdata %>% filter(Gene=='KRAS'),'Gender','Alteration',var1lab =
 # ED_Figure 8 -------------------------------------------------------------
 
 # a-b ---------------------------------------------------------------------
-
-
 library(rstatix)
 library(ggbeeswarm)
 
@@ -514,14 +581,17 @@ plotdata <- bind_rows(
 ) %>% 
   left_join(covdata0) %>% 
   filter(Tumor_Barcode %in% sherlock_nonsmoker,Tumor_Barcode %in% sbs4negative) %>% 
-  mutate(Histology=factor(Histology,levels=c("Adenocarcinoma", "Carcinoid tumor", "Squamous cell carcinoma", "Other"),labels = c('LUAD','LUSC','Carcinoid tumors','Others'))) %>% 
+  # mutate(Histology=factor(Histology,levels=c("Adenocarcinoma", "Squamous cell carcinoma", "Carcinoid tumor", "Other"),labels = c('LUAD','LUSC','Carcinoid tumors','Others'))) %>%
+  filter(Histology!='Other') %>% 
+  mutate(Histology=factor(Histology,levels=c("Adenocarcinoma", "Squamous cell carcinoma", "Carcinoid tumor"),labels = c('LUAD','LUSC','Carcinoid tumors'))) %>% 
   mutate(Value=log10(Value)) %>% 
   filter(is.finite(Value)) %>% 
   mutate(profile = factor(profile,levels=c('SBS','DBS','ID','CN segments','SV')))
   
 
+#my_comparisons <- list(c("LUAD", "LUSC"),c("LUAD", "Carcinoid tumors"),c("LUAD", "Others"),c("LUSC", "Carcinoid tumors"),c("LUSC", "Others"),c("Carcinoid tumors","Others"))
 
-my_comparisons <- list(c("LUAD", "LUSC"),c("LUAD", "Carcinoid tumors"),c("LUAD", "Others"),c("LUSC", "Carcinoid tumors"),c("LUSC", "Others"),c("Carcinoid tumors","Others"))
+my_comparisons <- list(c("LUAD", "LUSC"),c("LUAD", "Carcinoid tumors"),c("LUSC", "Carcinoid tumors"))
 
 stat.test <- plotdata %>% 
   group_by(profile) %>% 
@@ -560,7 +630,9 @@ plotdata <- sherlock_variable %>%
   pivot_wider()%>% 
   left_join(covdata0) %>% 
   filter(Tumor_Barcode %in% sherlock_nonsmoker,Tumor_Barcode %in% sbs4negative) %>% 
-  mutate(Histology=factor(Histology,levels=c("Adenocarcinoma", "Carcinoid tumor", "Squamous cell carcinoma", "Other"),labels = c('LUAD','LUSC','Carcinoid tumors','Others'))) %>% 
+  #mutate(Histology=factor(Histology,levels=c("Adenocarcinoma", "Squamous cell carcinoma","Carcinoid tumor", "Other"),labels = c('LUAD','LUSC','Carcinoid tumors','Others'))) %>% 
+  filter(Histology!='Other') %>% 
+  mutate(Histology=factor(Histology,levels=c("Adenocarcinoma", "Squamous cell carcinoma", "Carcinoid tumor"),labels = c('LUAD','LUSC','Carcinoid tumors'))) %>% 
   mutate(Value=Telseq_TL_Ratio) %>% 
   filter(is.finite(Value))
 
@@ -585,7 +657,7 @@ plotdata %>%
   panel_border(color = 'black',linetype = 1)+
   stat_pvalue_manual(stat.test, label = "myformatted.p")
 
-ggsave(filename = 'LCINS_nonSBS4_TL.pdf',width = 4 ,height =7,device = cairo_pdf)  
+ggsave(filename = 'LCINS_nonSBS4_TL.pdf',width = 3.5 ,height =7,device = cairo_pdf)  
 
 
 
@@ -1097,10 +1169,10 @@ plotdata %>%
 ggsave(filename = 'LCINS_LUADvsLUSC_DriverGene_Gender_association.pdf',width = 5,height = 4,device = cairo_pdf)
 
 
-# 12c ----------------------------------------------------------------------
+# 12c-g ----------------------------------------------------------------------
 source('../../Sherlock_functions.R')
 plotdata <- sherlock_data_full %>% 
-  filter(Gene %in% c('TP53','EGFR','LRP1B','PTEN'), Type=='Mutation_Driver') %>%
+  filter(Gene %in% c('TP53','EGFR','LRP1B','PTEN','PIK3CA'), Type=='Mutation_Driver') %>%
   left_join(covdata0) %>% 
   filter(Tumor_Barcode %in% sherlock_nonsmoker,Histology %in% c('Adenocarcinoma','Squamous cell carcinoma')) %>% 
   mutate(Histology = factor(Histology,levels=c('Adenocarcinoma','Squamous cell carcinoma'),labels=c('LUAD','LUSC')))
@@ -1114,7 +1186,7 @@ barplot_fisher(plotdata %>% filter(Gene=='EGFR'),'Histology','Alteration',var1la
 
 barplot_fisher(plotdata %>% filter(Gene=='PTEN'),'Histology','Alteration',var1lab =  "Histology",var2lab = 'PTEN mutation status',filename = 'LCINS_LUADvsLUSC_PTEN.pdf',textcol = 'black')
 
-
+barplot_fisher(plotdata %>% filter(Gene=='PIK3CA'),'Histology','Alteration',var1lab =  "Histology",var2lab = 'PIK3CA mutation status',filename = 'LCINS_LUADvsLUSC_PIK3CA.pdf',textcol = 'black')
 
 
 
@@ -1394,7 +1466,7 @@ ggsave(filename = 'LCINS_LUADvsOthers_DriverGene_Gender_association.pdf',width =
 # 14c ----------------------------------------------------------------------
 source('../../Sherlock_functions.R')
 plotdata <- sherlock_data_full %>% 
-  filter(Gene %in% c('TP53','EGFR'), Type=='Mutation_Driver') %>%
+  filter(Gene %in% c('TP53','EGFR','CDKN2A','KRAS'), Type=='Mutation_Driver') %>%
   left_join(covdata0) %>% 
   filter(Tumor_Barcode %in% sherlock_nonsmoker,Histology %in% c('Adenocarcinoma','Other')) %>% 
   mutate(Histology = factor(Histology,levels=c('Adenocarcinoma','Other'),labels=c('LUAD','Others')))
@@ -1404,6 +1476,9 @@ barplot_fisher(plotdata %>% filter(Gene=='TP53'),'Histology','Alteration',var1la
 
 barplot_fisher(plotdata %>% filter(Gene=='EGFR'),'Histology','Alteration',var1lab =  "Histology",var2lab = 'EGFR mutation status',filename = 'LCINS_LUADvsOthers_EGFR.pdf')
 
+barplot_fisher(plotdata %>% filter(Gene=='KRAS'),'Histology','Alteration',var1lab =  "Histology",var2lab = 'KRAS mutation status',filename = 'LCINS_LUADvsOthers_KRAS.pdf')
+
+barplot_fisher(plotdata %>% filter(Gene=='CDKN2A'),'Histology','Alteration',var1lab =  "Histology",var2lab = 'CDKN2A mutation status',filename = 'LCINS_LUADvsOthers_CDKN2A.pdf')
 
 # ED_Figure 15 ------------------------------------------------------------
 
@@ -1479,7 +1554,7 @@ Exposure_Clustering(sigdata = sigdata,studydata = studydata,sigcolor = sigcol[co
 prevalence_plot(sigdata = sigdata,nmutation = 0,output_plot = paste0('SBS4_nonsmoker_SBS_prevalence.pdf'),colset = sigcol,rel_widths = c(1,4))
 
 
-# 13b ----------------------------------------------------------------------
+# 15c ----------------------------------------------------------------------
 
 # DBS
 sigdata <- ludmil_activity_all %>% filter(Tumor_Barcode %in% sherlock_nonsmoker_SBS4) %>% select(Samples=Tumor_Barcode,starts_with('DBS')) 
@@ -1505,7 +1580,7 @@ prevalence_plot(sigdata = sigdata,nmutation = 0,output_plot = paste0('SBS4_nonsm
 
 
 
-# 13c ----------------------------------------------------------------------
+# 15d ----------------------------------------------------------------------
 
 # ID
 sigdata <- ludmil_activity_all %>% filter(Tumor_Barcode %in% sherlock_nonsmoker_SBS4) %>% select(Samples=Tumor_Barcode,starts_with('ID')) 
@@ -1528,6 +1603,93 @@ names(studycol) <- c('Yes','No')
 Exposure_Clustering(sigdata = sigdata,studydata = studydata,sigcolor = sigcol[colnames(sigdata)],studyname = 'Passive Smoking',studydata_cat = TRUE,studycolor = studycol,puritydata = puritydata,puritydata_cat = T,puritycol = puritycol,purityname = "Gender",cosinedata = cosinedata,clustern=10,sampletext_size = 0,output_plot = 'tmp1.pdf' )
 
 prevalence_plot(sigdata = sigdata,nmutation = 0,output_plot = paste0('SBS4_nonsmoker_ID_prevalence.pdf'),colset = sigcol,rel_widths = c(1,4))
+
+
+
+# 15e ----------------------------------------------------------------------
+conflicts_prefer(cowplot::get_legend)
+conflicts_prefer(dplyr::lag)
+library(data.table)
+source('../../RDS/Oncoplots_functions.R')
+tmp <- read_csv('../../RDS/oncoplot_colors.csv')
+landscape_colors <- tmp$Color
+names(landscape_colors) <- tmp$Name
+
+# drive gene
+data_top <- sherlock_data %>% 
+  filter(Type=='Mutation_Driver',Gene %in% drglist) %>% 
+  mutate(Alteration = str_remove(Alteration,":.*")) %>% 
+  unique()
+
+# fusion
+genelist <- c('RET','ALK','AXL','NRG1','MET','FGFR2','ROS1','RB1','ERBB4','EGFR','PTPRT','PTPRB','PTPRD')
+data_fusion <- sherlock_data %>% filter(Type=='Fusion',Gene %in% genelist)
+
+# focal CNV 
+genelist <- c('BAP1','FAT1','ROS1','CDKN2A','KRAS','BRCA2','RB1','B2M','FANCA','TP53','SMAD4','CHEK2','TERT','IRF4','GRHL2','MYC','RET','KDM5A','MDM2','NKX2-1','GRIN2A','GRB2','KEAP1')
+data_focal <- sherlock_data %>% filter(Type=='SCNA_Focal_Gene',Gene %in% genelist)
+
+# CNV ARM
+data_arm <- sherlock_data %>% filter(Type=='SCNA_Arm')
+
+# catagoly value
+data_feature <- sherlock_overall %>% 
+  select(Subject,Tumor_Barcode,Assigned_Population,Gender,Smoking,Histology,WGD_Status,SCNA_Group,MMR_Status,HR_Status,HRD_Type,HLA_LOH,HRDetect_Status,Kataegis,EBV) %>% 
+  pivot_longer(cols = -c(Subject,Tumor_Barcode)) %>% 
+  filter(!value %in% c('No','None','N')) %>% 
+  mutate(Type='Genomic_Feature') %>% 
+  select(Subject,Tumor_Barcode,Gene=name,Alteration = value,Type) 
+
+# continues value 
+data_feature2 <- sherlock_overall %>% 
+  select(Subject,Tumor_Barcode,Tumor_Purity,Subclonal_Mutation_Ratio,NRPCC) %>% 
+  left_join(sherlock_PGA %>% select(-PGA) %>% rename(PGA=PGA_WGD)) %>% 
+  pivot_longer(cols = -c(Subject,Tumor_Barcode)) %>% 
+  mutate(Type=name) %>% 
+  select(Subject,Tumor_Barcode,Gene=name,Alteration= value,Type) 
+
+# TMB
+data_tmb <- sherlock_overall %>% 
+  select(Subject,Tumor_Barcode,SNV,INDEL,SV) %>% 
+  pivot_longer(cols = -c(Subject,Tumor_Barcode)) %>% 
+  mutate(Type='Mutations') %>% 
+  select(Subject,Tumor_Barcode,Gene=name,Alteration= value,Type) 
+
+
+# Define the sample set
+sample_level0 <-  sherlock_nonsmoker_SBS4
+
+result_top <- oncoplot(data = data_top,landscape_colors = landscape_colors,sample_level0 = sample_level0,GeneSortOnly = TRUE)
+result_scna <- oncoplot(data = data_focal,landscape_colors = landscape_colors,sample_level0 = sample_level0,GeneSortOnly = TRUE)
+result_arm <- oncoplot(data = data_arm,landscape_colors = landscape_colors,sample_level0 = sample_level0,GeneSortOnly = TRUE)
+result_fusion <- oncoplot(data = data_fusion,landscape_colors = landscape_colors,sample_level0 = sample_level0,GeneSortOnly = TRUE)
+result_feature <- oncoplot(data = data_feature,landscape_colors = landscape_colors,sample_level0 = sample_level0,GeneSortOnly = TRUE)
+
+sample_new_level <- result_top$sample_level %>% 
+  left_join(
+    result_scna$sample_level
+  ) %>% 
+  left_join(
+    result_feature$sample_level
+  ) %>% arrange(Mutation_Driver,SCNA_Focal_Gene,Genomic_Feature) %>% 
+  pull(Tumor_Barcode)
+
+result_top <- oncoplot(data = data_top,landscape_colors = landscape_colors,sample_level0 = sample_level0,sample_level = sample_new_level,tmar = -0.2,bmar = -0.05)
+#result_fusion <- oncoplot(data = data_fusion,landscape_colors = landscape_colors,sample_level0 = sample_level0,sample_level = sample_new_level,bmar = -0.05)
+result_scna <- oncoplot(data = data_focal,landscape_colors = landscape_colors,sample_level0 = sample_level0,sample_level = sample_new_level,bmar = -0.05,)
+#result_arm <- oncoplot(data = data_arm,landscape_colors = landscape_colors,sample_level0 = sample_level0,sample_level = sample_new_level,bmar = -0.05,)
+result_feature <- oncoplot(data = data_feature,landscape_colors = landscape_colors,sample_level0 = sample_level0,sample_level = sample_new_level,bmar = 0,p2_axis_hidden = TRUE,p2_hidden = TRUE,removeAlterbyColor=TRUE)
+
+result_purity <- oncoplot2(data = data_feature2 %>% filter(Gene == 'Tumor_Purity'),sample_level0 = sample_level0,sample_level = sample_new_level,scale_fill_ztw = scale_fill_viridis_c(),tmar=0,bmar = -0.1,p2_axis_hidden = TRUE,p2_hidden = TRUE)
+result_ratio <- oncoplot2(data = data_feature2 %>% filter(Gene=='Subclonal_Mutation_Ratio'),sample_level0 = sample_level0,sample_level = sample_new_level,scale_fill_ztw = scale_fill_viridis_c(option = "C"),tmar=-0.2,bmar = -0.1,p2_axis_hidden = TRUE,p2_hidden = TRUE)
+result_nrpcc <- oncoplot2(data = data_feature2 %>% filter(Gene =='NRPCC'),sample_level0 = sample_level0,sample_level = sample_new_level,scale_fill_ztw = scale_fill_material(palette = 'green'),tmar=-0.2,bmar =0,p2_axis_hidden = TRUE,p2_hidden = TRUE)
+result_cnvratio <- oncoplot2(data = data_feature2 %>% filter(Gene =='PGA'),sample_level0 = sample_level0,sample_level = sample_new_level,scale_fill_ztw = scale_fill_material(palette = 'blue'),tmar=-0.2,bmar =0,p2_axis_hidden = TRUE,p2_hidden = TRUE)
+
+result_tmb <- oncoplot3(data = data_tmb,landscape_colors = landscape_colors,sample_level0 = sample_level0,sample_level = sample_new_level,tmar=0.2,bmar=-0.2,height = 6)
+
+oncoplot_final <- oncoplot_combined(result_tmb,result_top,result_scna,result_feature,result_purity,result_ratio,result_nrpcc,result_cnvratio) #
+
+save_plot(filename = 'Genome_landscape_nonesmoker_SBS4.pdf',plot = oncoplot_final,base_height = 8,base_width = 6,device=cairo_pdf)
 
 
 
@@ -1894,7 +2056,7 @@ ggsave(filename = 'LCINS_passive_smoking_signature_enrichment_others.pdf',width 
 
 # ED_Figure 19 ------------------------------------------------------------
 tdata <- bind_rows(
-  sherlock_cn68_profile %>% mutate(Profile='CN segements'),
+  sherlock_cn68_profile %>% mutate(Profile='CN segments'),
   sherlock_sv38_profile %>% mutate(Profile='SV')
 ) %>% 
   group_by(Tumor_Barcode,Profile) %>% 
@@ -1908,8 +2070,8 @@ tdata <- bind_rows(
 my_comparisons <- list(c("Low", "High"))
 
 # 19a ---------------------------------------------------------------
-plotdata <- tdata %>% select(Tumor_Barcode,`CN segements`, SV,Pollution_group2) %>% pivot_longer(cols = -c(Tumor_Barcode,Pollution_group2)) %>% filter(is.finite(value)) %>% 
-  mutate(name=factor(name,levels=c('CN segements','SV')))
+plotdata <- tdata %>% select(Tumor_Barcode,`CN segments`, SV,Pollution_group2) %>% pivot_longer(cols = -c(Tumor_Barcode,Pollution_group2)) %>% filter(is.finite(value)) %>% 
+  mutate(name=factor(name,levels=c('CN segments','SV')))
 
 stat.test <- plotdata %>% 
   group_by(name) %>% 
@@ -1939,8 +2101,8 @@ ggsave(filename = 'LCINS_Pollution_mutations_others.pdf',width = 4.6 ,height =6,
 
 
 # 19b ---------------------------------------------------------------------
-plotdata <- tdata %>% select(Tumor_Barcode,`CN segements`,SV,Pollution_group2) %>% pivot_longer(cols = -c(Tumor_Barcode,Pollution_group2)) %>% filter(is.finite(value)) %>% 
-  mutate(name=factor(name,levels=c('CN segements','SV'))) %>% 
+plotdata <- tdata %>% select(Tumor_Barcode,`CN segments`,SV,Pollution_group2) %>% pivot_longer(cols = -c(Tumor_Barcode,Pollution_group2)) %>% filter(is.finite(value)) %>% 
+  mutate(name=factor(name,levels=c('CN segments','SV'))) %>% 
   left_join(covdata0)
 
 plotdata <- plotdata %>% 
@@ -1998,7 +2160,7 @@ testdata <- ludmil_activity_all_obs %>%
   ungroup() %>% 
   arrange(p.value) %>% 
   mutate(Profile=factor(Profile,levels=c('CN','SV'),labels=c('CN signatures','SV signatures'))) %>% 
-  mutate(dir=if_else(estimate>1,'Enrich in high PM2.5','Enriched in low PM2.5')) 
+  mutate(dir=if_else(estimate>1,'Enriched in high PM2.5','Enriched in low PM2.5')) 
   #mutate(dir=if_else(estimate>1,expression("Enriched in high PM"[2.5]*),expression("Enriched in low PM"[2.5]*)))
 
 testdata %>% 
@@ -2015,7 +2177,7 @@ testdata %>%
   scale_y_continuous(breaks = pretty_breaks(n=7))+
   theme_ipsum_rc(base_size = 12,axis_title_just = 'm',axis_title_size = 14,grid = F,ticks = T,plot_margin=margin(5.5,5.5,5.5,5.5))+
   theme(plot.title = element_text(hjust = 0.5),strip.text.x = element_text(hjust = 0.5,face = 'bold',size = 14),panel.spacing = unit(0.3,'cm'),legend.position = 'bottom')+
-  labs(x = expression("Odd ratio (" * 10 ~ mu*g/m^3 * " of PM" [2.5] * ", log2)"), y = '-log10(FDR)', fill='Enrichement')+
+  labs(x = expression("Odd ratio (" * 10 ~ mu*g/m^3 * " of PM" [2.5] * ", log2)"), y = '-log10(FDR)', fill='Enrichment')+
  # guides(fill="none",color='none')+
   panel_border(color = 'black',linetype = 1,size=0.5)+
   coord_cartesian(clip = 'off')
@@ -2212,18 +2374,23 @@ tdata_group <- testdata %>%
   summarise(mean_pollution=mean(PM25,na.rm = T),Burden = mean(value,na.rm = T),nsample=n_distinct(Tumor_Barcode)) %>% 
   mutate(Burden= if_else(Country_pollution == 'Azerbaijan',4.2,Burden))
 
+tdata_group2 <- testdata %>% 
+  group_by(Country_pollution) %>% 
+  summarise(mean_pollution=mean(PM25,na.rm = T),Burden = mean(value,na.rm = T),nsample=n_distinct(Tumor_Barcode))
+
+
 tmpbreak <- pretty_breaks()(tdata_group$Burden)
 tmplabel <- tmpbreak
 tmplabel[length(tmplabel)] <- paste0('>',tmplabel[length(tmplabel)])
 
 tdata_group %>% 
   ggplot(aes(mean_pollution,(Burden)))+
-  stat_smooth(method="lm",fullrange=TRUE)+
+  stat_smooth(data = tdata_group2,method="lm",fullrange=TRUE)+
   geom_point(aes(size=nsample),pch=21,fill='gray20',col='white',stroke=0.2)+
   ggrepel::geom_text_repel(aes(label=Country_pollution),size=3.2,col='gray30',force = 30,segment.color='gray35',max.overlaps = 30)+
   scale_x_continuous(breaks = pretty_breaks())+
   scale_size_binned(breaks = c(0,40,80,120,160,200))+
-  scale_y_continuous(breaks = tmpbreak,labels = tmplabel)+
+  scale_y_continuous(breaks = tmpbreak,labels = tmplabel,limits = c(NA,4.21))+
   # scale_y_log10(breaks = trans_breaks("log10", function(x) 10^x),
   #               labels = trans_format("log10", math_format(10^.x))) +
   theme_ipsum_rc(axis_title_just = 'm',axis_title_size = 14,grid = FALSE,axis = 'XY',ticks = T,plot_margin=margin(5.5,5.5,5.5,5.5))+
@@ -2236,3 +2403,6 @@ ggsave(filename = 'Pollution_assocaition_SBS_noSBS4_mutations.pdf',width = 5,hei
 
 
 
+# Data for macros ---------------------------------------------------------
+
+save(carcinoid_nonsmoker,cn68_denovo_activity_nonsmoker,cn68_denovo_mapping_detail_nonsmoker,cn68_signature_denovo_nonsmoker,covdata_rare,dbs78_denovo_activity_nonsmoker, dbs78_denovo_mapping_detail_nonsmoker,dbs78_signature_denovo_nonsmoker,id83_denovo_activity_nonsmoker,id83_denovo_mapping_detail_nonsmoker, id83_signature_denovo_nonsmoker,LCINS, rare_nonsmoker,sbs288_denovo_activity_nonsmoker, sbs288_denovo_mapping_detail_nonsmoker,sherlock_cn48_profile, sherlock_overall,sherlock_sbs96_profile,sherlock_sv38_profile,sv38_denovo_activity_nonsmoker, sv38_denovo_mapping_detail_nonsmoker,sv38_signature_denovo_nonsmoker,b2map,Barcode2map,barplot_fisher,BBsolution4,clinical_data,cn68_activity,covdata0,drglist,genome2size,ludmil_activity_all,ludmil_activity_all_obs,Mutation_Signature_Probability_SBS,ncicolpal,PieDonut_ztw,pollution_colors,pollution_data,prevalence_plot,sherlock_data_full,sherlock_dbs78_profile,sherlock_driver_mutations,sherlock_id83_profile,sherlock_PGA,sherlock_sbs288_profile,sherlock_sbs96_profile,sherlock_variable,sp_group_color_new,sp_group_data2,sv38_activity,TMBplot2,wgs_groups_info,file='Extended_Data_Figure.RData')
