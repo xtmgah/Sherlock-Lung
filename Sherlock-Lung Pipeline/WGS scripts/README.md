@@ -38,7 +38,7 @@ bash pipeline-hg38CRAM-ztw.sh <bam/cram_file> <output_folder> <nthreads> [shortR
 
 <output_folder>: Directory to save outputs.
 
-<nthreads>: Number of CPU threads.
+'<'nthreads'>': Number of CPU threads.
 
 [shortReadremove]: Optional; set to true to remove reads shorter than 30 bp.
 
@@ -47,7 +47,7 @@ bash pipeline-hg38CRAM-ztw.sh <bam/cram_file> <output_folder> <nthreads> [shortR
 bash pipeline-hg38CRAM-ztw.sh sample.cram SampleOutput 16 true
 ```
 
-
+---
 ### Step 2: Somatic and Germline Mutation Calling
 Perform mutation calling using Sentieon algorithms (**MuTect**, **MuTect2**, **TNscope**, etc.):
 
@@ -79,6 +79,7 @@ bash pipeline-ztw-tumor_normal.sh \
 ```
 Outputs include somatic SNVs, indels, structural, and germline variants.
 
+---
 ### Step 3: Merge and Annotate Mutation Calls
 Merge, filter, and annotate variants from multiple callers:
 
@@ -106,7 +107,5 @@ bash variant-filter-multiple.sh \
   NSLC-0269-T01
 ```
 Filtered variants will be annotated using ANNOVAR. Final variants include annotations of clinical relevance, frequency, and functional impact.
-
-
 
 
