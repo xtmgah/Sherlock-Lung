@@ -47,14 +47,6 @@ rm(list=c('hq_samples'))
 
 
 # ID2 with all proliferation markers
-## new limitation to hqsamples for luad only
-load('../covdata0.RData')
-hq_samples2 <- covdata0 %>% filter(Histology == 'Adenocarcinoma', Tumor_Barcode %in% hq_samples) %>% pull(Tumor_Barcode)
-lq_samples2 <- covdata0 %>% filter(Histology == 'Adenocarcinoma', !(Tumor_Barcode %in% hq_samples)) %>% pull(Tumor_Barcode)
-
-rm(list=c('hq_samples'))
-
-
 genelist <- c('MKI67','TOP2A','MYBL2','BUB1','PLK1','CCNE1','CCNB1','BUB1','FOXM1')
 load('../RDS/sherlock_data_all.RData')
 tdata <- rdata1 %>% filter(Gene %in% genelist)
@@ -279,7 +271,7 @@ tdata %>%
 
 
 # Fig. 3e -----------------------------------------------------------------
-# Association with ID2 tumors ---------------------------------------------
+# Association with ID2 tumors
 load('id2data.RData')
 load('../RDS/sherlock_data_all.RData')
 load('../BBsolution_final3_short.RData')
