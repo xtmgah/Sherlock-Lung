@@ -651,7 +651,7 @@ plotdata %>%
   scale_fill_manual(values = sgroupcol)+
   scale_y_continuous(breaks = pretty_breaks(n = 7))+
   theme_ipsum_rc(base_size = 15,axis_title_just = 'm',axis_title_size = 16,plot_margin=margin(5.5,5.5,5.5,5.5),plot_title_size = 18,ticks = T)+
-  labs(x = NULL, y = 'Telomere length ratio, log2(Tumor TL/Normal TL')+
+  labs(x = NULL, y = 'Telomere length ratio, log2(Tumor TL/Normal TL)')+
   theme(plot.title = element_text(hjust = 0.5),strip.text.x = element_text(size=14,face = 'bold',hjust = 0.5),panel.spacing.x = unit(0.2,'cm'),axis.text.x = element_text(angle = 30,hjust = 1,vjust = 1))+
   guides(fill="none")+
   panel_border(color = 'black',linetype = 1)+

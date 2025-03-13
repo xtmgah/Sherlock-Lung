@@ -132,13 +132,15 @@ tdata <- sherlock_data_full %>%
   pivot_wider(names_from = Gene,values_from = Alteration) %>% 
   mutate(TP53=factor(TP53,labels =c('TP53 Wild-type','TP53 Mutant'))) %>% 
   left_join(
-    sherlock_variable %>% filter(name == 'TMB') %>% pivot_wider()
+    sherlock_variable %>% filter(name == 'Mutations') %>% pivot_wider()
   ) %>% 
-  mutate(TMB=log2(TMB)) %>% 
+  mutate(TMB=log10(Mutations)) %>% 
   filter(Tumor_Barcode %in% luad_nonsmoker ) %>% 
   left_join(covdata0)
 
-tdata %>% group_by(TP53) %>% do(tidy(lm(TMB ~ EGFR + Tumor_Purity + Assigned_Population + Gender + Age, data=.)))
+tdata %>% group_by(TP53) %>% do(tidy(lm(TMB ~ EGFR + Tumor_Purity + Assigned_Population + Gender + Age, data=.),conf.int = T, conf.level = 0.95)) %>% 
+  filter(term=='EGFRMutant') %>% 
+  select(TP53,term,estimate,conf.low,conf.high)
   
 stat.test <- tdata %>% 
   group_by(TP53) %>% 
@@ -157,7 +159,7 @@ tdata %>%
   scale_y_continuous(breaks = pretty_breaks())+
   facet_wrap(~TP53)+
   theme_ipsum_rc(base_size = 13,axis_title_just = 'm',axis_title_size = 15,plot_margin=margin(5.5,5.5,5.5,5.5),plot_title_size = 15,ticks = T)+
-  labs(x = "EGFR mutation status", y = 'Tumor mutational burden (log2)')+
+  labs(x = "EGFR mutation status", y = 'Number of mutations (log10)')+
   theme(plot.title = element_text(hjust = 0.5),strip.text.x = element_text(face = 'bold',hjust = 0.5))+
   guides(fill="none")+
   panel_border(color = 'black',linetype = 1)+

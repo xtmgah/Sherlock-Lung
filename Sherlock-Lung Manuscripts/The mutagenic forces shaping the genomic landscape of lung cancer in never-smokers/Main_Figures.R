@@ -241,13 +241,13 @@ tdata_nr <-
 
 tdata <- tdata %>% left_join(tdata_nr)
 
-tdata$node <- factor(tdata$node,levels = c('Adenocarcinoma','Squamous cell carcinoma','Carcinoid tumor','Others', 'EUR','EAS','Other',"NA/EU","AS","Other_region",'Female','Male','Yes','No','Unknown'))
+tdata$node <- factor(tdata$node,levels = c('Adenocarcinoma','Carcinoid tumor','Squamous cell carcinoma','Others', 'EUR','EAS','Other',"NA/EU","AS","Other_region",'Female','Male','Yes','No','Unknown'))
 
 ggplot(tdata, aes(x = x, next_x = next_x, node = node, next_node = next_node, fill = factor(node), label = node)) +
   geom_sankey(flow.alpha = .6, node.color = "gray30",space = 35,width = 0.13) +
   geom_sankey_text(size = 4, color = "black") +
   geom_sankey_text(aes(label = count), size = 3.5, check_overlap = TRUE,) +
-  scale_fill_manual(values = ncicolpal[c(4,1,3,2,5,6,11,13,15,12,18,10,9,20,8)])+
+  scale_fill_manual(values = ncicolpal[c(4,3,1,2,5,6,11,13,15,12,18,10,9,20,8)])+
   #scale_fill_d3(palette = 'category20') +
   theme_sankey(base_size = 18) +
   labs(x = NULL) +
@@ -488,9 +488,13 @@ for(histmp in unique(covdata0$Histology)){
 freqdata_all <- freqdata_SV %>% filter(Value>0) %>% mutate(Profile='SV') %>% bind_rows(freqdata_all)
 
 # visualization
+# freqdata_all <- freqdata_all %>% 
+#   mutate(Profile=factor(Profile,levels=c('SBS','DBS','ID','CN','SV'))) %>% 
+#   mutate(Histology = factor(Histology, levels=c('Adenocarcinoma','Squamous cell carcinoma','Carcinoid tumor','Other'),labels=c('LUAD','LUSC','Carcinoid tumor','Others')))
+
 freqdata_all <- freqdata_all %>% 
   mutate(Profile=factor(Profile,levels=c('SBS','DBS','ID','CN','SV'))) %>% 
-  mutate(Histology = factor(Histology, levels=c('Adenocarcinoma','Squamous cell carcinoma','Carcinoid tumor','Other'),labels=c('LUAD','LUSC','Carcinoid tumor','Others')))
+  mutate(Histology = factor(Histology, levels=rev(c('Adenocarcinoma','Carcinoid tumor','Squamous cell carcinoma','Other')),labels=rev(c('LUAD','Carcinoid tumors','LUSC','Others'))))
 
 siglevs <- freqdata_all %>% select(Profile,Signature) %>% mutate(Channel=extract_numeric(Signature)) %>% arrange(Profile,Channel) %>% unique() %>% pull(Signature)
 
@@ -665,7 +669,7 @@ p2 <- testdata %>%
   scale_x_continuous(breaks = pretty_breaks(n = 7),limits = c(-4.5,4.5),position = "top")+
   scale_y_continuous(breaks = pretty_breaks(n=7))+
   theme_ipsum_rc(base_size = 12,axis_title_just = 'm',axis_title_size = 12,grid = F,ticks = T,plot_margin=margin(5.5,5.5,5.5,5.5))+
-  labs(x = 'Odd ratio (log2)', y = '-log10(FDR)\n')+
+  labs(x = 'Odds ratio (log2)', y = '-log10(FDR)\n')+
   guides(fill="none")+
   panel_border(color = 'black',linetype = 1,size=0.5)+
   coord_cartesian(clip = 'off')
@@ -724,7 +728,7 @@ plotdata %>%
   scale_y_continuous(breaks = pretty_breaks())+
   scale_fill_nejm()+
   ggrepel::geom_text_repel(data=plotdata %>% filter(FDR<0.05),aes(label=Gene),max.overlaps = 30,size=4.5)+
-  labs(x='Odd ratio (log2)',y='-log10(FDR)')+
+  labs(x='Odds ratio (log2)',y='-log10(FDR)')+
   guides(fill = "none")+
   theme_ipsum_rc(base_size = 14,axis_title_just = 'm',axis_title_size = 16,grid=FALSE,ticks = T,plot_margin=margin(5.5,5.5,5.5,5.5))+
   panel_border(color = 'black',size = 0.5)
@@ -752,6 +756,12 @@ plotdata %>%
   panel_border(color = 'black',size = 0.5)
 ggsave(filename = 'LUAD_N_driver_region2.pdf',width = 3,height = 4,device = cairo_pdf)
 
+
+testdata %>% 
+  filter(Gene %in% c('EGFR','KRAS','TP53')) %>% 
+  select(Gene,Alteration,Country_Group) %>% 
+  group_by(Gene) %>% 
+  do(tidy(fisher.test(.$Alteration,.$Country_Group)))
 
 # Figure 2g ---------------------------------------------------------------
 load('../Mutation_Signature_Probability_SBS.RData',verbose = T)
@@ -982,7 +992,7 @@ testdata %>%
   scale_y_continuous(breaks = pretty_breaks(n=7))+
   theme_ipsum_rc(base_size = 12,axis_title_just = 'm',axis_title_size = 12,grid = F,ticks = T,plot_margin=margin(5.5,5.5,5.5,5.5))+
   theme(plot.title = element_text(hjust = 0.5))+
-  labs(x = 'Odd ratio (log2)', y = '-log10(FDR)',title='SBS mutational signatures')+
+  labs(x = 'Odds ratio (log2)', y = '-log10(FDR)',title='SBS mutational signatures')+
   guides(fill="none",color='none')+
   panel_border(color = 'black',linetype = 1,size=0.5)+
   coord_cartesian(clip = 'off')
@@ -1075,7 +1085,7 @@ plotdata %>%
   scale_y_continuous(breaks = pretty_breaks())+
   scale_fill_jama()+
   ggrepel::geom_text_repel(data=plotdata %>% filter(FDR<1),aes(label=Gene),force = 10,max.overlaps = 30,size=4.5)+
-  labs(x='Odd ratio (log2)',y='-log10(FDR)',title = 'Driver genes')+
+  labs(x='Odds ratio (log2)',y='-log10(FDR)',title = 'Driver genes')+
   guides(fill = "none")+
   theme_ipsum_rc(base_size = 14,axis_title_just = 'm',axis_title_size = 16,grid=FALSE,ticks = T,plot_margin=margin(5.5,5.5,5.5,5.5),plot_title_size = 15)+
   theme(plot.title = element_text(hjust = 0.5))+
@@ -1524,7 +1534,7 @@ testdata %>%
   scale_y_continuous(breaks = pretty_breaks(n=7))+
   theme_ipsum_rc(base_size = 12,axis_title_just = 'm',axis_title_size = 14,grid = F,ticks = T,plot_margin=margin(5.5,5.5,5.5,5.5))+
   theme(plot.title = element_text(hjust = 0.5),strip.text.x = element_text(hjust = 0.5,face = 'bold',size = 14),panel.spacing = unit(0.3,'cm'))+
-  labs(x = expression("Odd ratio (" * 10 ~ mu*g/m^3 * " of PM" [2.5] * ", log2)"), y = '-log10(FDR)')+
+  labs(x = expression("Odds ratio (" * 10 ~ mu*g/m^3 * " of PM" [2.5] * ", log2)"), y = '-log10(FDR)')+
   guides(fill="none",color='none')+
   panel_border(color = 'black',linetype = 1,size=0.5)+
   coord_cartesian(clip = 'off')
@@ -1589,8 +1599,8 @@ p <- plotdata %>%
   ggrepel::geom_text_repel(aes(label=label),size=3.5,nudge_y = 0.4)+
   theme_ipsum_rc(axis_title_just = 'm',axis_title_size = 14,grid_col = 'gray85',plot_title_size = 15,plot_margin=margin(5.5,5.5,5.5,5.5))+
   theme(panel.spacing = unit(0.3,"cm"),plot.title = element_text(hjust = 0.5),strip.text.x = element_text(face = 'bold',hjust = 0.5),axis.text.y = element_markdown())+
-  #labs(x =  expression("Odd ratio (log2) PM" [2.5] * 10 ~ mu*g/m^3), y = NULL)+
-  labs(x =  "Odd ratio (log2)", y = NULL)+
+  #labs(x =  expression("Odds ratio (log2) PM" [2.5] * 10 ~ mu*g/m^3), y = NULL)+
+  labs(x =  "Odds ratio (log2)", y = NULL)+
   guides(color="none")+
   panel_border(color = 'black',linetype = 1)
 
@@ -1817,7 +1827,7 @@ plotdata %>%
   scale_y_continuous(breaks = pretty_breaks())+
   scale_fill_manual(values = as.character(pollution_colors[c(1,3)]))+
   ggrepel::geom_text_repel(data=plotdata %>% filter(FDR<0.5),aes(label=Gene),force = 10,max.overlaps = 30,size=4.5)+
-  labs(x = expression("Odd ratio (" * 10 ~ mu*g/m^3 * " of PM" [2.5] * ", log2)"), y = '-log10(FDR)')+  guides(fill = "none")+
+  labs(x = expression("Odds ratio (" * 10 ~ mu*g/m^3 * " of PM" [2.5] * ", log2)"), y = '-log10(FDR)')+  guides(fill = "none")+
   theme_ipsum_rc(base_size = 14,axis_title_just = 'm',axis_title_size = 16,grid=FALSE,ticks = T,plot_margin=margin(5.5,5.5,5.5,5.5),plot_title_size = 15)+
   theme(plot.title = element_text(hjust = 0.5))+
   panel_border(color = 'black',size = 0.5)
