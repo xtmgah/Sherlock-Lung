@@ -1,6 +1,6 @@
-## RNA-Seq log2TPM Data (`rna_seq_log2tpm_data.RData`)
+## RNA-Seq log2TPM Data (`rna_seq_log2cpm_data.RData`)
 
-This R object contains an RNA-Seq quantification matrix in log2-transformed TPM values (`rna_seq_log2tpm_data`), derived from samples used in this manuscript as part of the **Sherlock-Lung Study**.
+This R object contains an RNA-Seq quantification matrix in log2-transformed CPM values (`rna_seq_log2cpm_data`), derived from samples used in this manuscript as part of the **Sherlock-Lung Study**.
 
 ### Sample Naming Convention:
 The columns (sample names) within the matrix follow the format:
@@ -12,10 +12,10 @@ The columns (sample names) within the matrix follow the format:
 ### How to Load and Inspect Data in R:
 
 ```r
-load("rna_seq_log2tpm_data.RData")
+load("rna_seq_log2cpm_data.RData")
 
 # Inspect the first few rows and columns:
-rna_seq_log2tpm_data[1:4, 1:4]
+rna_seq_log2cpm_data[1:4, 1:4]
 
 # A tibble: 4 × 4
   Gene     `SC622881:NSLC-0264-T01:Normal` `SC622883:NSLC-0274-T01:Normal` `SC622889:NSLC-0264-T01:Tumor`
