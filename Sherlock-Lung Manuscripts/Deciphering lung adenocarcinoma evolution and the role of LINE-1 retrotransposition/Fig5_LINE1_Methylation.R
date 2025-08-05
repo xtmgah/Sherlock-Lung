@@ -1,20 +1,80 @@
+# ------------------------------------------------------------------------------
+# Script: Figure 5 - Tumor Evolution Analysis (LUAD cohort)
+# Description: This script reproduces all main analyses and figures for tumor 
+# evolution in high-quality LUAD samples.
+# ------------------------------------------------------------------------------
 
-# Fig. 5a -----------------------------------------------------------------
-# figure modified based a publication by Levin and Mora (ref 58), the mechanism depicts non-LTR retrotransposons mobilizing through target-site-primed reverse transcription (TPRT)
+# --- Load Required Libraries and Set Plotting Styles ---------------------------
+# (You may need to install some packages if missing)
+library(tidyverse)
+library(ggplot2)
+library(ggsankey)
+library(scales)
+library(hrbrthemes)   # For theme_ipsum_rc
+library(cowplot)
+library(forcats)
+library(ggrepel)
+library(ggnewscale)
+library(data.table)
+library(ggasym)
+library(ggpmisc)
+library(broom)
+library(ggsci)
+library(ggpubr)
+library(hablar)
+library(conflicted)
+library(valr)
+conflicts_prefer(dplyr::filter)
+conflicts_prefer(dplyr::rename)
+conflicts_prefer(ggplot2::annotate)
+# --- Define Helper Functions (if any custom) -----------------------------------
+# Please source your custom functions here if needed, or place them in ./functions/
+# source('./functions/your_custom_functions.R')
+
+# --- Load Input Datasets ------------------------------------------------------
+# All data files should be placed in the appropriate subfolders.
+# Example folder structure:
+#   ./data/           - for main input files
+#   ./functions/      - for custom R functions
+#   ./output/         - for saving plots and results
+
+# Replace the filenames below with your actual dataset filenames.
+
+# load Sherlock-lung data -------------------------------------------------
+load('./data/BBsolution_final3_short.RData')
+
+# load Sherlock-lung data -------------------------------------------------
+load('./data/BBsolution_final3_short.RData',verbose = T)
+load('./data/covdata0.RData',verbose = T)
+load('./data/clinical_data.RData',verbose = T)
+load('./data/sherlock_data_all.RData',verbose = T)
+load('./data/sherlock_variable.RData',verbose = T)
+load('./data/sp_group_data.RData',verbose = T)
+load('./data/id2data.RData',verbose = T)
+load('./data/tedata.RData',verbose = T)
+load('./data/RNASeq_Exp.RData',verbose = T)
 
 
-libztw()
-set_wd()
+## analysis limited to luad only
+hq_samples2 <- covdata0 %>% filter(Histology == 'Adenocarcinoma', Tumor_Barcode %in% hq_samples) %>% pull(Tumor_Barcode)
+rm(list=c('hq_samples'))
+
+
+
+# Fig. 5a figure modified based a publication by Levin and Mora (ref 58), the mechanism depicts non-LTR retrotransposons mobilizing through target-site-primed reverse transcription (TPRT)-----------
+#Diagram illustrating the transposon mobilization mechanism for long interspersed element 1 (L1). Adapted from a publication by Levin and Moran58, this mechanism depicts non-LTR retrotransposons mobilizing through target-site-primed reverse transcription (TPRT). ORF2-encoded endonuclease generates a single-strand ‘nick’ in genomic DNA, freeing a 3′-OH used to prime RNA reverse transcription. Demethylated CpG in the L1 promoter region (top purple arrow) is hypothesized to activate L1 retrotransposition. Endonuclease activity, coupled with DNA repair mechanisms, might lead to one-base pair deletions or insertions at polymer A/T regions.
+
+
+# Fig. 5b: Validation of DNA methylation levels in the promoter region of germline L1 insertions from germline source in chr22q12.1, conducted via targeted bisulfite sequencing.-----------
+#The polar plot represents the median methylation level across the genome locations of the CpG island on chr22q12.1, stratified by normal lung samples (N=80), tumor samples without ID2 signature (N=40), and tumors samples with ID2 signature (N=40). Control samples were designed to represent 0%, 33.3%, 66.6%, and 100% methylation levels at each CpG site as shown on the y-axis. 
 
 # load the data -----------------------------------------------------------
-load('../../BBsolution_final3_short.RData')
-
-tmp <- readxl::read_xlsx('email/Sherlock data MC (Methylation levels){BE}.xlsx',sheet = 1,col_names = T,n_max = 1)
+tmp <- readxl::read_xlsx('data/Sherlock data MC (Methylation levels){BE}.xlsx',sheet = 1,col_names = T,n_max = 1)
 tmp <- tmp %>% 
   pivot_longer(cols = -c(`Region Chr22:`, `...2` )) %>%
   select(Pos=name,CpG_ID=value)
 
-tmp2 <- readxl::read_xlsx('email/Sherlock data MC (Methylation levels){BE}.xlsx',sheet = 1,col_names = T,skip = 1)
+tmp2 <- readxl::read_xlsx('data/Sherlock data MC (Methylation levels){BE}.xlsx',sheet = 1,col_names = T,skip = 1)
 mdata <- tmp2 %>% 
   pivot_longer(cols = -c(`CpG n.`,`Tumor/Normal/Control` )) %>% 
   rename(Barcode=`CpG n.`, Type=`Tumor/Normal/Control`,CpG_ID=name,Beta=value) %>% 
@@ -44,7 +104,7 @@ mdata <- mdata %>%
 
 mdata_control <- mdata %>% filter(Type=='Control')
 
-tmp3 <- readxl::read_xlsx('email/Sherlock data MC 2024-2023 (Methylation levels){BE}.xlsx',sheet = 2,col_names = T,skip = 2)
+tmp3 <- readxl::read_xlsx('./data/Sherlock data MC 2024-2023 (Methylation levels){BE}.xlsx',sheet = 2,col_names = T,skip = 2)
 mdata <- tmp3 %>% 
   pivot_longer(cols = -c(`Year of analysis`,`Sample name`,`Tumor/Normal/Control` )) %>% 
   select(-`Year of analysis`) %>% 
@@ -81,19 +141,10 @@ mdata <- mdata %>% left_join(
 
 mdata <- bind_rows(mdata_control,mdata)
 
-save(mdata,file='CGW_data.RData')
-
+#save(mdata,file='CGW_data.RData')
 
 
 ## new limitation to hqsamples for luad only
-load('../../BBsolution_final3_short.RData')
-load('../../covdata0.RData')
-hq_samples2 <- covdata0 %>% filter(Histology == 'Adenocarcinoma', Tumor_Barcode %in% hq_samples) %>% select(Tumor_Barcode) %>% left_join(wgs_groups_info) %>% pull(Subject)
-rm(list=c('hq_samples'))
-
-load('../../ID2_TE/id2data.RData')
-load('../../sp_group_data.RData')
-
 tmpdata <- wgs_groups_info %>% 
   left_join(sp_group_data2) %>% 
   left_join(id2data) %>% 
@@ -186,18 +237,15 @@ mdata %>%
   scale_fill_manual(values = sp_group_color_new)+
   coord_cartesian(clip = 'off')
 
-ggsave(filename = 'methylation_haplotype_tmp.pdf',width = 22,height = 14,device = cairo_pdf)
-
-
+ggsave(filename = './output/methylation_haplotype_tmp.pdf',width = 22,height = 14,device = cairo_pdf)
 
 
 # Fig. 5c -----------------------------------------------------------------
+# Box plot shows DNA median methylation levels across the genome locations of the CpG island on chr22q12.1, stratified by the sample type and ID2 status. 
 
-
-# Difference among difference groups --------------------------------------
+# Difference among difference groups
 
 # tumor vs normal
-
 tmpx <- mdata %>% 
   filter(Type!='Control') %>% 
   select(Subject,Type,Pos,Beta) %>% 
@@ -230,8 +278,7 @@ p2 <- tmpx %>%
 
 plot_grid(p1,p2,align = 'v',axis = 'lr',rel_heights = c(6,1),ncol = 1)
 
-ggsave(filename = 'methylation_haplotype_tumor_normal.pdf',width = 16,height = 7,device = cairo_pdf)
-
+ggsave(filename = './output/methylation_haplotype_tumor_normal.pdf',width = 16,height = 7,device = cairo_pdf)
 
 tmpx <- mdata %>% 
   filter(Type=='Tumor') %>% 
@@ -265,9 +312,7 @@ p2 <- tmpx %>%
 
 plot_grid(p1,p2,align = 'v',axis = 'lr',rel_heights = c(6,1),ncol = 1)
 
-ggsave(filename = 'methylation_haplotype_tumor_ID2.pdf',width = 16,height = 7,device = cairo_pdf)
-
-
+ggsave(filename = './output/methylation_haplotype_tumor_ID2.pdf',width = 16,height = 7,device = cairo_pdf)
 
 
 ## boxplots for the group
@@ -296,7 +341,7 @@ mdata %>%
   panel_border(color = 'black',linetype = 1)+
   stat_compare_means(comparisons = my_comparisons)
 
-ggsave(filename = 'methylation_group_comparaison.pdf',width = 2.6,height = 7,device = cairo_pdf)
+ggsave(filename = './output/methylation_group_comparaison.pdf',width = 2.6,height = 7,device = cairo_pdf)
 
 # linear relationship
 mdata %>% 
@@ -315,7 +360,7 @@ mdata %>%
   panel_border(color = 'black',linetype = 1,size=0.5)+
   guides(fill="none")
 
-ggsave(filename = 'methylation_ID2_correlation.pdf',width = 4.5,height = 4,device = cairo_pdf)
+ggsave(filename = './output/methylation_ID2_correlation.pdf',width = 4.5,height = 4,device = cairo_pdf)
 
 mdata %>% 
   filter(Type=='Tumor', ID2>0) %>% 
@@ -329,11 +374,8 @@ mdata %>%
 
 
 
-
-
-
-
 # Fig. 5b -----------------------------------------------------------------
+#Validation of DNA methylation levels in the promoter region of germline L1 insertions from germline source in chr22q12.1, conducted via targeted bisulfite sequencing. The polar plot represents the median methylation level across the genome locations of the CpG island on chr22q12.1, stratified by normal lung samples (N=80), tumor samples without ID2 signature (N=40), and tumors samples with ID2 signature (N=40). Control samples were designed to represent 0%, 33.3%, 66.6%, and 100% methylation levels at each CpG site as shown on the y-axis. c) Box plot shows DNA median methylation levels across the genome locations of the CpG island on chr22q12.1, stratified by the sample type and ID2 status.
 
 # Polar plots 
 pdata <- mdata %>% 
@@ -367,18 +409,15 @@ pdata %>%
 #annotate('text', x = 1, y =seq(0,1,by=0.2),label=seq(0,1,by=0.2),size=4,col='#542788')+
 #guides(color="none")
 
-ggsave(filename = 'methylation_haplotype_polar.pdf',width = 5.5,height = 5.5,device = cairo_pdf)
-
-
+ggsave(filename = './output/methylation_haplotype_polar.pdf',width = 5.5,height = 5.5,device = cairo_pdf)
 
 
 
 
 # Fig. 6e -----------------------------------------------------------------
+#Correlation between ZNF695 RNA-Seq expression and the median of DNA methylation levels across the genome locations of the CpG island on chr22q12.1. Pearson correlation coefficients and corresponding p-values are displayed.
 
 # Methylation data and ZNF695 expression ----------------------------------
-load('../../RNASeq/RNASeq_Exp.RData',verbose = T)
-load('../../ID2_TE/hq_samples2.RData')
 
 pdata <- mdata %>% 
   filter(Type!='Control') %>% 
@@ -424,52 +463,50 @@ pdata %>%
   )+
   guides(fill='none',col='none')
 
-ggsave(filename = 'chr22_cpg_methyaltion_znf695_exp.pdf',width = 10,height =4,device = cairo_pdf)  
-
-
-
+ggsave(filename = './output/chr22_cpg_methyaltion_znf695_exp.pdf',width = 10,height =4,device = cairo_pdf)  
 
 
 # Fig. 5d ------------------------------------------------------------------
+#Total L1 RNA expression estimated from RNA-Seq data, stratified by sample type and group.
 
+# # Read L1EM result
+# l1em <- read_delim('./data/filter_L1HS_FPM.txt',delim = '\t',col_names = T)
+# l1em <- l1em %>% 
+#   mutate(tmp=family.category.locus.strand) %>% 
+#   separate(col = tmp,into = c('family','category','locus','strand'),sep = '\\.') %>% 
+#   mutate(strand=str_sub(strand,1,1))
+# 
+# # Cytoband 
+# 
+# cytoband <- read_delim('./data/cytoBand.txt.gz',delim = '\t',col_names = F)
+# colnames(cytoband) <- c('chrom','start','end','cytoband','region')
+# cytoband <- cytoband %>%mutate(cytoband=paste0(str_remove(chrom,'chr'),cytoband))
+# 
+# tmp <- l1em %>% 
+#   select(locus) %>% 
+#   unique() %>% 
+#   mutate(tmp=locus) %>% 
+#   separate(col = tmp,into = c('chrom','start','end'),convert = T) %>% 
+#   select(chrom:end,locus)
+# 
+# tmp <- bed_intersect(tmp,cytoband) %>% 
+#   select(locus=locus.x,cytoband=cytoband.y) %>% 
+#   group_by(locus) %>% 
+#   summarise(cytoband=paste0(cytoband,collapse = '-'))
+# 
+# l1em <- l1em %>% left_join(tmp)
+# 
+# l1em_all <- l1em %>% mutate(L1exp=only + `3prunon`, only_ratio=only/L1exp) %>% left_join(cdata)
+# l1em <- l1em_all %>% filter(L1exp>2,only_ratio>0.9) 
+# 
+# save(l1em,l1em_all,file='L1EM.RData')
 
-
-# Read L1EM result --------------------------------------------------------
-l1em <- read_delim('filter_L1HS_FPM.txt',delim = '\t',col_names = T)
-l1em <- l1em %>% 
-  mutate(tmp=family.category.locus.strand) %>% 
-  separate(col = tmp,into = c('family','category','locus','strand'),sep = '\\.') %>% 
-  mutate(strand=str_sub(strand,1,1))
-
-# Cytoband 
-
-cytoband <- read_delim('cytoBand.txt.gz',delim = '\t',col_names = F)
-colnames(cytoband) <- c('chrom','start','end','cytoband','region')
-cytoband <- cytoband %>%mutate(cytoband=paste0(str_remove(chrom,'chr'),cytoband))
-
-tmp <- l1em %>% 
-  select(locus) %>% 
-  unique() %>% 
-  mutate(tmp=locus) %>% 
-  separate(col = tmp,into = c('chrom','start','end'),convert = T) %>% 
-  select(chrom:end,locus)
-
-tmp <- bed_intersect(tmp,cytoband) %>% 
-  select(locus=locus.x,cytoband=cytoband.y) %>% 
-  group_by(locus) %>% 
-  summarise(cytoband=paste0(cytoband,collapse = '-'))
-
-l1em <- l1em %>% left_join(tmp)
-
-l1em_all <- l1em %>% mutate(L1exp=only + `3prunon`, only_ratio=only/L1exp) %>% left_join(cdata)
-l1em <- l1em_all %>% filter(L1exp>2,only_ratio>0.9) 
-
-save(l1em,l1em_all,file='L1EM.RData')
-
-
+load('./data/L1EM.RData')
 # Landscape of L1EM in tumor and normal in all available dataset-----------------------------------
+
 library(tidyHeatmap)
 library(circlize)
+library(ComplexHeatmap)
 
 tdata <- l1em %>% 
   group_by(Sample, cytoband,dataset,RNAseq_Type) %>% 
@@ -482,9 +519,7 @@ cytoband_list <- tdata %>% count(cytoband,sort=T) %>% filter(n>20) %>% pull(cyto
 tdata <- tdata %>% filter(cytoband %in% cytoband_list) %>% complete(nesting(Sample,dataset,RNAseq_Type),cytoband,fill = list(L1exp=0))
 
 
-cairo_pdf(file = 'L1-Exp-RNAseq-all-tumor.pdf',width = 9,height = 10,family = 'Roboto Condensed')
-cairo_pdf(file = 'L1-Exp-RNAseq-all-normal.pdf',width = 9,height = 4,family = 'Roboto Condensed')
-
+cairo_pdf(file = './output/L1-Exp-RNAseq-all-tumor.pdf',width = 9,height = 10,family = 'Roboto Condensed')
 tdata %>% 
   #filter(RNAseq_Type =='Tumor') %>% 
   filter(RNAseq_Type =='Normal') %>% 
@@ -522,7 +557,7 @@ library(tidyHeatmap)
 library(grid)
 
 #cairo_pdf(file = 'L1-Exp-RNAseq-hq-luad-tumor.pdf',width = 5,height = 8,family = 'Roboto Condensed')
-cairo_pdf(file = 'L1-Exp-RNAseq-hq-luad-normal.pdf',width = 5,height = 6,family = 'Roboto Condensed')
+cairo_pdf(file = './output/L1-Exp-RNAseq-hq-luad-normal.pdf',width = 5,height = 6,family = 'Roboto Condensed')
 
 tdata %>% 
   #filter(RNAseq_Type =='Tumor') %>% 
@@ -563,18 +598,16 @@ tdata %>%
   labs(x = "", y = 'LINE-1 RNA (FPM)',fill='Sample Type')+
   panel_border(color = 'black',linetype = 1)
 
-ggsave(filename = 'L1-Exp-RNAseq-hq-luad-overall.pdf',width = 5,height = 5,device = cairo_pdf)
+ggsave(filename = './output/L1-Exp-RNAseq-hq-luad-overall.pdf',width = 5,height = 5,device = cairo_pdf)
 
-tdata %>% group_by(SP_Group_New) %>% do(tidy(wilcox.test(L1exp~RNAseq_Type,data=.))) %>% ungroup() %>% filter(SP_Group_New != 'Others') %>% select(SP_Group_New,p.value) %>% arrange(p.value) %>% write_clip()
+tdata %>% group_by(SP_Group_New) %>% do(tidy(wilcox.test(L1exp~RNAseq_Type,data=.))) %>% ungroup() %>% filter(SP_Group_New != 'Others') %>% select(SP_Group_New,p.value) %>% arrange(p.value) 
+tdata %>% filter(SP_Group_New %in% c('EU_S','AS_N')) %>% group_by(RNAseq_Type) %>% do(tidy(wilcox.test(L1exp~SP_Group_New,data=.))) %>% ungroup()  %>% select(RNAseq_Type,p.value) %>% arrange(p.value)
+tdata %>% filter(SP_Group_New %in% c('EU_S','EU_N')) %>% group_by(RNAseq_Type) %>% do(tidy(wilcox.test(L1exp~SP_Group_New,data=.))) %>% ungroup()  %>% select(RNAseq_Type,p.value) %>% arrange(p.value)
 
-tdata %>% filter(SP_Group_New %in% c('EU_S','AS_N')) %>% group_by(RNAseq_Type) %>% do(tidy(wilcox.test(L1exp~SP_Group_New,data=.))) %>% ungroup()  %>% select(RNAseq_Type,p.value) %>% arrange(p.value) %>% write_clip()
-tdata %>% filter(SP_Group_New %in% c('EU_S','EU_N')) %>% group_by(RNAseq_Type) %>% do(tidy(wilcox.test(L1exp~SP_Group_New,data=.))) %>% ungroup()  %>% select(RNAseq_Type,p.value) %>% arrange(p.value) %>% write_clip()
-
-
-tdata %>% mutate(SP_Group_New=if_else(SP_Group_New == 'AS_N','EU_N',SP_Group_New)) %>% filter(SP_Group_New %in% c('EU_S','EU_N')) %>% group_by(RNAseq_Type) %>% do(tidy(wilcox.test(L1exp~SP_Group_New,data=.))) %>% ungroup()  %>% select(RNAseq_Type,p.value) %>% arrange(p.value) %>% write_clip()
+tdata %>% mutate(SP_Group_New=if_else(SP_Group_New == 'AS_N','EU_N',SP_Group_New)) %>% filter(SP_Group_New %in% c('EU_S','EU_N')) %>% group_by(RNAseq_Type) %>% do(tidy(wilcox.test(L1exp~SP_Group_New,data=.))) %>% ungroup()  %>% select(RNAseq_Type,p.value) %>% arrange(p.value)
 
 
-load('../SmokingVar/sdata.RData')
+load('./data/sdata.RData')
 
 my_comparisons <- list(c("Smoker", "Non-Smoker"))
 tdata %>%
@@ -594,7 +627,7 @@ tdata %>%
   stat_compare_means(comparisons = my_comparisons)
 
 
-ggsave(filename = 'L1-Exp-RNAseq-hq-luad-overall_smoking.pdf',width = 6.5,height = 5,device = cairo_pdf)
+ggsave(filename = './output/L1-Exp-RNAseq-hq-luad-overall_smoking.pdf',width = 6.5,height = 5,device = cairo_pdf)
 
 
 my_comparisons <- list(c("Current Smoker", "Non-Smoker"),c("Former Smoker", "Non-Smoker"),c("Current Smoker", "Former Smoker"))
@@ -618,14 +651,12 @@ tdata %>%
   stat_compare_means(comparisons = my_comparisons)
 
 
-ggsave(filename = 'L1-Exp-RNAseq-hq-luad-overall_smoking2.pdf',width = 8,height = 6,device = cairo_pdf)
-
+ggsave(filename = './output/L1-Exp-RNAseq-hq-luad-overall_smoking2.pdf',width = 8,height = 6,device = cairo_pdf)
 
 # Fig. 5e -----------------------------------------------------------------
-
+# Total L1 RNA expression differs between tumors with and without the ID2 signature.
 
 # ID2 
-load('id2data.RData')
 
 tdata <- l1em %>% 
   select(-dataset,-RNAseq_Type) %>% 
@@ -640,7 +671,7 @@ tdata <- l1em %>%
 
 tdata <- tdata %>% left_join(id2data) 
 
-tdata %>% filter(SP_Group_New != "Others") %>% group_by(SP_Group_New) %>% do(tidy(wilcox.test(L1exp~ID2_Present,data=.))) %>% ungroup() %>% select(SP_Group_New,p.value) %>% write_clip()
+tdata %>% filter(SP_Group_New != "Others") %>% group_by(SP_Group_New) %>% do(tidy(wilcox.test(L1exp~ID2_Present,data=.))) %>% ungroup() %>% select(SP_Group_New,p.value)
 #%>% select(RNAseq_Type,p.value) %>% arrange(p.value) %>% write_clip()
 
 tdata %>% 
@@ -653,6 +684,5 @@ tdata %>%
   labs(x = "", y = 'LINE-1 RNA (FPM)',fill='ID2 Signature')+
   panel_border(color = 'black',linetype = 1)
 
-ggsave(filename = 'ID2-L1-Exp-RNAseq.pdf',width = 5,height = 6,device = cairo_pdf) 
-
+ggsave(filename = './output/ID2-L1-Exp-RNAseq.pdf',width = 5,height = 6,device = cairo_pdf) 
 

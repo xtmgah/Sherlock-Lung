@@ -1,41 +1,66 @@
-set_wd()
-libztw()
-pdfhr2()
-myggstyle()
+# ------------------------------------------------------------------------------
+# Script: Figure 2 - Tumor Evolution Analysis (LUAD cohort)
+# Description: This script reproduces all main analyses and figures for tumor 
+# evolution in high-quality LUAD samples.
+# ------------------------------------------------------------------------------
 
-# load Sherlock-lung data -------------------------------------------------
-load('/Users/zhangt8/NIH-Work/EAGLE_NSLC/SecondPaper/Biowulf/BBsolution_final3_short.RData')
-load('/Users/zhangt8/NIH-Work/EAGLE_NSLC/SecondPaper/Biowulf/covdata0.RData')
-load('/Users/zhangt8/NIH-Work/EAGLE_NSLC/SecondPaper/Biowulf/Clinical/clinical_data.RData')
-load('/Users/zhangt8/NIH-Work/EAGLE_NSLC/SecondPaper/Biowulf/RDS/sherlock_data_all.RData')
-load('/Users/zhangt8/NIH-Work/EAGLE_NSLC/SecondPaper/Biowulf/RDS/sherlock_variable.RData')
+# --- Load Required Libraries and Set Plotting Styles ---------------------------
+# (You may need to install some packages if missing)
+library(tidyverse)
+library(ggplot2)
+library(ggsankey)
+library(scales)
+library(hrbrthemes)   # For theme_ipsum_rc
+library(cowplot)
+library(forcats)
+library(ggrepel)
+library(ggnewscale)
+library(data.table)
+library(ggasym)
+library(ggpmisc)
+library(broom)
+library(ggsci)
 
-load('/Users/zhangt8/NIH-Work/EAGLE_NSLC/SecondPaper/Biowulf/sp_group_data.RData')
+# --- Define Helper Functions (if any custom) -----------------------------------
+# Please source your custom functions here if needed, or place them in ./functions/
+# source('./functions/your_custom_functions.R')
 
-load('/Users/zhangt8/NIH-Work/EAGLE_NSLC/SecondPaper/Biowulf/ID2_TE/id2data.RData')
-load('/Users/zhangt8/NIH-Work/EAGLE_NSLC/SecondPaper/Biowulf/ID2_TE/tedata.RData')
+# --- Load Input Datasets ------------------------------------------------------
+# All data files should be placed in the appropriate subfolders.
+# Example folder structure:
+#   ./data/           - for main input files
+#   ./functions/      - for custom R functions
+#   ./output/         - for saving plots and results
 
-load('/Users/zhangt8/NIH-Work/EAGLE_NSLC/SecondPaper/Biowulf/RNASeq/RNASeq_Exp.RData',verbose = T)
+# Replace the filenames below with your actual dataset filenames.
+load('./data/BBsolution_final3_short.RData')
+load('./data/sp_group_data.RData')
+load('./data/covdata0.RData')
+load('./data/clinical_data.RData')
+load('./data/sherlock_data_all.RData')
+load('./data/sherlock_variable.RData')
+load('./data/sp_group_data.RData')
+load('./data/id2data.RData')
+load('./data/tedata.RData')
+load('./data/RNASeq_Exp.RData',verbose = T)
+load('./data/suvdata.RData',verbose = T)
 
 
 # load function -----------------------------------------------------------
-load('/Users/zhangt8/NIH-Work/EAGLE_NSLC/SecondPaper/Biowulf/ZTW_functions.RData')
+load('./data/ZTW_functions.RData')
 
 # load analysis related data set
-load('/Users/zhangt8/NIH-Work/EAGLE_NSLC/SecondPaper/Biowulf/MutationTimeR_HQ_LUAD/Chronological_timing_short.RData',verbose = T)
+load('./data/Chronological_timing.RData',verbose = T)
 tmp <- colnames(MRCAdata)
 MRCAdata <- MRCAdata %>% select(-SP_Group) %>% left_join(sp_group_data2) %>% select(-SP_Group_New) %>% select(one_of(tmp))
 
-load('/Users/zhangt8/NIH-Work/EAGLE_NSLC/SecondPaper/Biowulf/Survival/suvdata.RData',verbose = T)
 ## analysis limited to luad only
 hq_samples2 <- covdata0 %>% filter(Histology == 'Adenocarcinoma', Tumor_Barcode %in% hq_samples) %>% pull(Tumor_Barcode)
 rm(list=c('hq_samples'))
 
-
-# Fig. 2a,d -----------------------------------------------------------------
+# =======================Original codes for performing association analysis for all genomic variables with latency variables ========================
 
 #  Latency difference among all genome alteration or features
-load('../sp_group_data.RData')
 tdata <- MRCAdata %>% filter(!is.na(Latency)) %>% select(Tumor_Barcode,Acc=acceleration,Latency) #Histology == "Adenocarcinoma"; acceleration == '1x'
 #tdata <- MRCAdata %>% filter(!is.na(Latency),acceleration == '1x',SP_Group %in% c('N_A','N_U')) %>% select(Tumor_Barcode,Latency) #Histology == "Adenocarcinoma"
 
@@ -72,8 +97,6 @@ tresult_all <- tdata_all %>%
   separate(col = 'TMP',into = c('Gene_short','Type'),sep = '\\|') %>%
   ungroup()
 
-
-
 # add diff
 tdata_all <- tdata_all %>% mutate(Alteration = case_when(
   Alteration %in% c("Female","Y","Yes","Non-Smoker","WGD") ~ "Yes",
@@ -89,7 +112,6 @@ freq_mrca <- tdata_all %>% drop_na()  %>% count(SP_Group_New,Acc,Gene,Alteration
 # tmpsize <- mdata %>% select(Tumor_Barcode,name) %>% unique()  %>% count(name) 
 # freq_mrca <- mdata %>% count(name,value) %>% filter(!is.na(value)) %>% left_join(tmpsize)%>% mutate(Freq=n/size) %>% group_by(name) %>% arrange(Freq) %>% dplyr::slice(1) %>% ungroup() %>% select(name,Freq) %>% mutate(Freq=if_else(Freq==1,0,Freq))
 
-
 tresult_all <- tresult_all %>% left_join(tmpsize) %>% left_join(tmp) %>% left_join(freq_mrca)
 
 #saveRDS(tresult_all,file='latency_tresult.RDS')
@@ -100,9 +122,9 @@ tdata_all <- tdata_all %>%
 save(tresult_all,tdata_all,file='latency_tresult.RData')
 
 
+# ======================== Fig. 2d - Latency association with mutational signatures ========================
 # Signatures Only
 load('latency_tresult.RData')
-
 resulttmp <- tresult_all %>% 
   filter(Type=='Signature_Cosmic_final',!str_detect(Gene,'APOBEC')) %>% 
   filter(Acc=='1x') %>% 
@@ -168,7 +190,7 @@ p2 <- resulttmp %>%
 
 plot_grid(p2,p1,axis = 'v',align = 'lr',ncol = 1,rel_heights = c(1.1,4))
 
-ggsave(filename = 'latency_signatures.pdf',width = 16,height = 10,device = cairo_pdf)
+ggsave(filename = './output/latency_signatures.pdf',width = 16,height = 10,device = cairo_pdf)
 
 ## vacanol plot
 
@@ -189,12 +211,13 @@ resulttmp %>%
   coord_cartesian(clip = 'off')
 
 
-ggsave(filename = 'latency_fdr_signatures.pdf',width = 7,height = 5.5,device = cairo_pdf)
+ggsave(filename = './output/latency_fdr_signatures.pdf',width = 7,height = 5.5,device = cairo_pdf)
 
 
+# ======================== Fig.  2a - Latency association with driver genes ========================
 # Driver Mutations
-load('latency_tresult.RData')
-drglist <- readRDS('../../../Collaborators/Nuria/Update2/drivers_intogene.RDS') %>% pull(symbol)
+#load('latency_tresult.RData')
+drglist <- readRDS('./data/drivers_intogene.RDS') %>% pull(symbol)
 
 resulttmp <- tresult_all %>% 
   filter(Type=='Mutation_Driver',Gene_short %in% drglist) %>% 
@@ -259,7 +282,7 @@ resulttmp %>%
   panel_border(color = 'black',size = 0.5)+
   coord_cartesian(clip = 'off')
 
-ggsave(filename = 'latency_driverGene_signatures.pdf',width = 5,height = 5.5,device = cairo_pdf)
+ggsave(filename = './output/latency_driverGene_signatures.pdf',width = 5,height = 5.5,device = cairo_pdf)
 
 ## for EGFR
 tmp <- resulttmp <- tresult_all %>% 
@@ -287,7 +310,7 @@ tdata_all %>%
   facet_grid(.~label,scales = 'free',space='free')+
   panel_border(color = 'black',linetype = 1)
 
-ggsave(filename = 'latency_driverGene_signatures2.pdf',width = 6,height = 6,device = cairo_pdf)
+ggsave(filename = './output/latency_driverGene_signatures2.pdf',width = 6,height = 6,device = cairo_pdf)
 
 
 ## for KRAS
@@ -317,25 +340,22 @@ tdata_all %>%
   facet_grid(.~label,scales = 'free',space='free')+
   panel_border(color = 'black',linetype = 1)
 
-ggsave(filename = 'latency_driverGene_signatures_kras.pdf',width = 6,height = 6,device = cairo_pdf)
+ggsave(filename = './output/latency_driverGene_signatures_kras.pdf',width = 6,height = 6,device = cairo_pdf)
 
-# example of regression
-load('../covdata0.RData')
-tdata_all %>% 
-  filter(Type=='Mutation_Driver',Gene_short %in% 'EGFR') %>% 
-  filter(Acc=='1x') %>% 
-  left_join(covdata0) %>% 
-  filter(SP_Group_New %in% c('AS_N','EU_N','EU_S')) %>%
-  group_by(SP_Group_New) %>% 
-  do(tidy(lm(Latency~Alteration+Gender+Histology+Tumor_Purity,data=.))) %>% 
-  filter(term=='AlterationYes') %>% 
-  arrange(p.value)
-#do(tidy(t.test(Latency~Alteration,data=.)))
-
+# # example of regression
+# tdata_all %>% 
+#   filter(Type=='Mutation_Driver',Gene_short %in% 'EGFR') %>% 
+#   filter(Acc=='1x') %>% 
+#   left_join(covdata0) %>% 
+#   filter(SP_Group_New %in% c('AS_N','EU_N','EU_S')) %>%
+#   group_by(SP_Group_New) %>% 
+#   do(tidy(lm(Latency~Alteration+Gender+Histology+Tumor_Purity,data=.))) %>% 
+#   filter(term=='AlterationYes') %>% 
+#   arrange(p.value)
+# #do(tidy(t.test(Latency~Alteration,data=.)))
 
 
-# Fig. 2b-c ------------------------------------------------------
-
+# ======================== Fig.  2b-c - Latency association with EGFR, Gender, Sex ========================
 tmp <- sherlock_data_full %>% 
   filter(Type=='Mutation_Driver',Gene=='EGFR') %>% 
   select(Tumor_Barcode,EGFR=Alteration)
@@ -368,7 +388,7 @@ tdata %>%
   facet_grid(.~label,scales = 'free',space='free')+
   panel_border(color = 'black',linetype = 1)
 
-ggsave(filename = 'latency_gender_signatures.pdf',width = 6,height = 5.8,device = cairo_pdf)
+ggsave(filename = './output/latency_gender_signatures.pdf',width = 6,height = 5.8,device = cairo_pdf)
 
 
 p1 <- tdata %>% 
@@ -403,7 +423,7 @@ p2 <- tdata %>%
 plot_grid(p1,p2,align = 'v',axis = 'lr')
 
 
-ggsave(filename = 'latency_gender_EGFR_signatures2.pdf',width = 7.5,height = 5.5,device = cairo_pdf)
+ggsave(filename = './output/latency_gender_EGFR_signatures2.pdf',width = 7.5,height = 5.5,device = cairo_pdf)
 
 tdata %>% 
   filter(SP_Group_New=='EU_N') %>%
@@ -414,8 +434,6 @@ tdata %>%
   filter(SP_Group_New=='EU_N') %>%
   group_by(EGFR) %>% 
   do(tidy(wilcox.test(Latency~Gender,data=.)))
-
-
 
 
 tdata %>% 
@@ -464,13 +482,10 @@ tmpresult %>%
   scale_x_continuous(breaks = pretty_breaks())+
   panel_border(color = 'black',linetype = 1)
 
-ggsave(filename = 'latency_gender_EGFR_signatures.pdf',width = 14,height = 3,device = cairo_pdf)
+ggsave(filename = './output/latency_gender_EGFR_signatures.pdf',width = 14,height = 3,device = cairo_pdf)
 
 
-
-
-# Fig. 2e ---------------------------------------------------
-load('../ID2_TE/id2data.RData')
+# ======================== Fig.  2e - Latency association (Multivarible regression) ========================
 
 tmp1 <- sherlock_data_full %>% 
   filter(Type=='Mutation_Driver',Gene=='EGFR') %>% 
@@ -547,13 +562,16 @@ tmpresult %>%
   scale_x_continuous(breaks = pretty_breaks())+
   panel_border(color = 'black',linetype = 1)
 
-ggsave(filename = 'latency_multivariables.pdf',width = 8,height = 5,device = cairo_pdf)
+ggsave(filename = './output/latency_multivariables.pdf',width = 8,height = 5,device = cairo_pdf)
 
 
 
 summary(lm(Latency~Gender+Assigned_Population+Smoking+Tumor_Purity+Age,data=tdata))$r.squared
 
-summary(lm(Latency~Gender+Assigned_Population+Smoking+ID2_Present+Tumor_Purity+Age,data=tdata))
+summary(lm(Latency~Gender+Assigned_Population+Smoking+ID2_Present+Tumor_Purity+Age,data=tdata))$r.squared
+
+summary(lm(Latency~Gender+Assigned_Population+Smoking+EGFR+KRAS+Tumor_Purity+Age,data=tdata))$r.squared
+
 
 summary(lm(Latency~Gender+Assigned_Population+Smoking+ID2_Present+EGFR+KRAS+Tumor_Purity+Age,data=tdata))$r.squared
 
@@ -565,12 +583,9 @@ summary(lm(Latency~Assigned_Population+EGFR+EGFR:Assigned_Population + Tumor_Pur
 
 
 
-
-
-
+# Additional Supplementary Figures ----------------------------------------
 
 # Supplementary Fig. 12 ---------------------------------------------------
-
 
 #Supplementary Fig. 12a, overall 
 mrate %>% 
@@ -589,7 +604,7 @@ mrate %>%
   scale_x_continuous(breaks = pretty_breaks())+
   panel_border(color = 'black',linetype = 1)
 
-ggsave(filename = 'mutation_rate_age_all.pdf',width = 4,height = 3.6,device = cairo_pdf)
+ggsave(filename = './output/mutation_rate_age_all.pdf',width = 4,height = 3.6,device = cairo_pdf)
 
 # Supplementary Fig. 12b, seperated by the group
 mrate %>% 
@@ -608,7 +623,7 @@ mrate %>%
   scale_x_continuous(breaks = pretty_breaks())+
   panel_border(color = 'black',linetype = 1)
 
-ggsave(filename = 'mutation_rate_age.pdf',width = 12,height = 3.5,device = cairo_pdf)
+ggsave(filename = './output/mutation_rate_age.pdf',width = 12,height = 3.5,device = cairo_pdf)
 
 mrate %>% do(tidy(lm(log2(CpG.TpG.Gb)~age,data=.))) %>% filter(term!="(Intercept)") 
 
@@ -637,7 +652,7 @@ as.data.frame(qRateDeam) %>%
   theme_ipsum_rc(axis_title_just = 'm',axis_title_size = 14)+
   panel_border(color = 'black',linetype = 1)
 
-ggsave(filename = 'mutation_rate_age_average.pdf',width = 3,height = 4,device = cairo_pdf)
+ggsave(filename = './output/mutation_rate_age_average.pdf',width = 3,height = 4,device = cairo_pdf)
 
 
 
@@ -709,7 +724,7 @@ tdata %>%
   #guides(fill="none")+
   panel_border(color = 'black',linetype = 1)
 
-#ggsave(filename = 'latency_grade_enrichment_hongkong_toronto.pdf',width = 3.6,height = 6.5,device = cairo_pdf)
+#ggsave(filename = './output/latency_grade_enrichment_hongkong_toronto.pdf',width = 3.6,height = 6.5,device = cairo_pdf)
 
 
 tdata <- tdata %>% 
@@ -734,7 +749,7 @@ tdata%>%
   panel_border(color = 'black',linetype = 1)+
   stat_compare_means(comparisons = my_comparisons)
 
-ggsave(filename = 'latency_grade_enrichment_boxplot.pdf',width = 5,height = 7,device = cairo_pdf)
+ggsave(filename = './output/latency_grade_enrichment_boxplot.pdf',width = 5,height = 7,device = cairo_pdf)
 
 
 
@@ -766,7 +781,7 @@ tdata %>%
   #guides(fill="none")+
   panel_border(color = 'black',linetype = 1)
 
-ggsave(filename = 'ID2_grade_enrichment.pdf',width = 4,height = 6.5,device = cairo_pdf)
+ggsave(filename = './output/ID2_grade_enrichment.pdf',width = 4,height = 6.5,device = cairo_pdf)
 
 
 
@@ -794,7 +809,7 @@ tdata %>%
   #guides(fill="none")+
   panel_border(color = 'black',linetype = 1)
 
-ggsave(filename = 'L1_grade_enrichment.pdf',width = 4,height = 6.5,device = cairo_pdf)
+ggsave(filename = './output/L1_grade_enrichment.pdf',width = 4,height = 6.5,device = cairo_pdf)
 
 
 
@@ -827,7 +842,7 @@ tdata%>%
   panel_border(color = 'black',linetype = 1)+
   stat_compare_means(comparisons = my_comparisons)
 
-ggsave(filename = 'latency_proliferation_expression.pdf',width = 8,height = 6,device = cairo_pdf)
+ggsave(filename = './output/latency_proliferation_expression.pdf',width = 8,height = 6,device = cairo_pdf)
 
 
 
@@ -842,7 +857,6 @@ tdata <- MRCAdata %>%
   left_join(sp_group_data2)
 
 tdata <- tdata %>% mutate(SP_Group_New = 'ALL') %>% bind_rows(tdata)
-
 
 my_comparisons <- list(c("Yes",'No'))
 
@@ -860,7 +874,7 @@ tdata %>%
   panel_border(color = 'black',linetype = 1)+
   stat_compare_means(comparisons = my_comparisons)
 
-ggsave(filename = 'TP53_MRCA_years.pdf',width = 5,height = 5,device = cairo_pdf)
+ggsave(filename = './output/TP53_MRCA_years.pdf',width = 5,height = 5,device = cairo_pdf)
 
 
 tmp <- rdata1 %>% 
@@ -882,12 +896,10 @@ sherlock_data_full %>%
   theme(plot.margin = margin(4,4,4,4),panel.spacing = unit(0.1,'cm'),strip.text.x = element_text(hjust = 0.5,face = 4))+
   labs(x = "TP53 mutation", y = 'RNA-Seq expression log2(CPM)')+
   guides(fill="none")+
-  panel_border(color = 'black',linetype = 1)+
-  stat_compare_means(comparisons = my_comparisons)
+  panel_border(color = 'black',linetype = 1)
+  #stat_compare_means(comparisons = my_comparisons)
 
-ggsave(filename = 'TP53_proliferation_expression.pdf',width = 9,height = 6,device = cairo_pdf)
-
-
+ggsave(filename = './output/TP53_proliferation_expression.pdf',width = 9,height = 6,device = cairo_pdf)
 
 
 
@@ -918,7 +930,7 @@ MRCAdata %>%
   stat_compare_means(comparisons = my_comparisons,method = 't.test',method.args = list(alternative='greater'))
 
 
-ggsave(filename = 'KRAS_ID2_present_vs_absent_latency.pdf',width = 5,height = 6,device = cairo_pdf)
+ggsave(filename = './output/KRAS_ID2_present_vs_absent_latency.pdf',width = 5,height = 6,device = cairo_pdf)
 
 
 
@@ -948,7 +960,7 @@ MRCAdata %>%
   panel_border(color = 'black',linetype = 1)+
   stat_compare_means(comparisons = my_comparisons)
 
-ggsave(filename = 'EGFR_SP_Group_latency.pdf',width = 4,height = 6,device = cairo_pdf)
+ggsave(filename = './output/EGFR_SP_Group_latency.pdf',width = 4,height = 6,device = cairo_pdf)
 
 
 # SP_group Latency difference----------------------------------------------------------------
@@ -977,7 +989,7 @@ MRCAdata %>%
   panel_border(color = 'black',linetype = 1)+
   stat_compare_means(comparisons = my_comparisons)
 
-ggsave(filename = 'latency_spgroup_1x.pdf',width = 4,height = 6,device = cairo_pdf)
+ggsave(filename = './output/latency_spgroup_1x.pdf',width = 4,height = 6,device = cairo_pdf)
 
 
 
@@ -998,7 +1010,7 @@ MRCAdata %>%
   stat_compare_means(comparisons = my_comparisons)#+
 #stat_compare_means(label.y = 100) 
 
-ggsave(filename = 'MRCA_spgroup.pdf',width = 4,height = 6,device = cairo_pdf)
+ggsave(filename = './output/MRCA_spgroup.pdf',width = 4,height = 6,device = cairo_pdf)
 
 
 
@@ -1018,7 +1030,7 @@ MRCAdata %>%
   panel_border(color = 'black',linetype = 1)+
   stat_compare_means(comparisons = my_comparisons)
 
-ggsave(filename = 'MRCA_spgroup_age.pdf',width = 4,height = 6,device = cairo_pdf)
+ggsave(filename = './output/MRCA_spgroup_age.pdf',width = 4,height = 6,device = cairo_pdf)
 
 MRCAdata %>% 
   left_join(sp_group_data) %>% 
@@ -1054,7 +1066,7 @@ MRCAdata %>%
   panel_border(color = 'black',linetype = 1)+
   stat_compare_means(comparisons = my_comparisons)
 
-ggsave(filename = 'latency_WGD_spgroup.pdf',width = 5,height = 6,device = cairo_pdf)
+ggsave(filename = './output/latency_WGD_spgroup.pdf',width = 5,height = 6,device = cairo_pdf)
 
 
 
@@ -1081,7 +1093,7 @@ tmp %>%
   guides(fill="none")+
   panel_border(color = 'black',linetype = 1)
 
-ggsave(filename = 'latency_dngroup.pdf',width = 4,height = 5,device = cairo_pdf)
+ggsave(filename = './output/latency_dngroup.pdf',width = 4,height = 5,device = cairo_pdf)
 
 MRCAdata %>% 
   filter(acceleration == "1x") %>% 
@@ -1138,7 +1150,7 @@ tresult %>%
   panel_border(color = 'black',size = 0.5)+
   coord_cartesian(clip = 'off')
 
-ggsave(filename = 'latency_sherlock_all.pdf',width = 12,height = 8,device = cairo_pdf)
+ggsave(filename = './output/latency_sherlock_all.pdf',width = 12,height = 8,device = cairo_pdf)
 
 
 # barplot # 
@@ -1187,7 +1199,7 @@ p2 <- tmp %>%
 
 plot_grid(p2,p1,axis = 'v',align = 'lr',ncol = 1,rel_heights = c(1.1,4))
 
-ggsave(filename = 'latency_fdr01.pdf',width = 16,height = 9,device = cairo_pdf)
+ggsave(filename = './output/latency_fdr01.pdf',width = 16,height = 9,device = cairo_pdf)
 
 
 # targeable alterations
@@ -1238,7 +1250,7 @@ p2 <- tmp %>%
 
 plot_grid(p2,p1,axis = 'v',align = 'lr',ncol = 1,rel_heights = c(1.1,4))
 
-ggsave(filename = 'latency_targetable.pdf',width = 16,height = 9,device = cairo_pdf)
+ggsave(filename = './output/latency_targetable.pdf',width = 16,height = 9,device = cairo_pdf)
 
 
 
@@ -1297,7 +1309,7 @@ tdata %>%
   labs(x = "", y = 'Latency, years before diagnosis')+
   panel_border(color = 'black',linetype = 1)
 
-ggsave(file='L1_latency_diff.pdf',width = 6,height = 5,device = cairo_pdf())
+ggsave(file='./output/L1_latency_diff.pdf',width = 6,height = 5,device = cairo_pdf())
 
 
 

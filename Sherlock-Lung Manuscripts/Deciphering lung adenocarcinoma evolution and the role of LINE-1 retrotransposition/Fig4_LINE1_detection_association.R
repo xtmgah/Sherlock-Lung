@@ -1,45 +1,80 @@
-set_wd()
-libztw()
-pdfhr2()
-myggstyle()
+# ------------------------------------------------------------------------------
+# Script: Figure 4 - Tumor Evolution Analysis (LUAD cohort)
+# Description: This script reproduces all main analyses and figures for tumor 
+# evolution in high-quality LUAD samples.
+# ------------------------------------------------------------------------------
+
+# --- Load Required Libraries and Set Plotting Styles ---------------------------
+# (You may need to install some packages if missing)
+library(tidyverse)
+library(ggplot2)
+library(ggsankey)
+library(scales)
+library(hrbrthemes)   # For theme_ipsum_rc
+library(cowplot)
+library(forcats)
+library(ggrepel)
+library(ggnewscale)
+library(data.table)
+library(ggasym)
+library(ggpmisc)
+library(broom)
+library(ggsci)
+library(hablar)
+library(circlize)
+library(ggseqlogo)
+library(conflicted)
+conflicts_prefer(dplyr::filter)
+conflicts_prefer(dplyr::rename)
+
+# --- Define Helper Functions (if any custom) -----------------------------------
+# Please source your custom functions here if needed, or place them in ./functions/
+# source('./functions/your_custom_functions.R')
+
+# --- Load Input Datasets ------------------------------------------------------
+# All data files should be placed in the appropriate subfolders.
+# Example folder structure:
+#   ./data/           - for main input files
+#   ./functions/      - for custom R functions
+#   ./output/         - for saving plots and results
+
+# Replace the filenames below with your actual dataset filenames.
 
 # load Sherlock-lung data -------------------------------------------------
-load('/Users/zhangt8/NIH-Work/EAGLE_NSLC/SecondPaper/Biowulf/BBsolution_final3_short.RData')
-load('/Users/zhangt8/NIH-Work/EAGLE_NSLC/SecondPaper/Biowulf/covdata0.RData')
-load('/Users/zhangt8/NIH-Work/EAGLE_NSLC/SecondPaper/Biowulf/Clinical/clinical_data.RData')
-load('/Users/zhangt8/NIH-Work/EAGLE_NSLC/SecondPaper/Biowulf/RDS/sherlock_data_all.RData')
-load('/Users/zhangt8/NIH-Work/EAGLE_NSLC/SecondPaper/Biowulf/RDS/sherlock_variable.RData')
-
-load('/Users/zhangt8/NIH-Work/EAGLE_NSLC/SecondPaper/Biowulf/RDS/sherlock_variable.RData')
-
-load('/Users/zhangt8/NIH-Work/EAGLE_NSLC/SecondPaper/Biowulf/sp_group_data.RData')
-
-load('/Users/zhangt8/NIH-Work/EAGLE_NSLC/SecondPaper/Biowulf/ID2_TE/id2data.RData')
-load('/Users/zhangt8/NIH-Work/EAGLE_NSLC/SecondPaper/Biowulf/ID2_TE/tedata.RData')
-
-load('/Users/zhangt8/NIH-Work/EAGLE_NSLC/SecondPaper/Biowulf/RNASeq/RNASeq_Exp.RData',verbose = T)
-load('/Users/zhangt8/NIH-Work/EAGLE_NSLC/SecondPaper/Biowulf/Signature_ludmil3/Signature_Lumidl_CN.RData',verbose = T)
-load('/Users/zhangt8/NIH-Work/EAGLE_NSLC/SecondPaper/Biowulf/Signature_ludmil3/Signature_Lumidl_SV.RData',verbose = T)
-load('/Users/zhangt8/NIH-Work/EAGLE_NSLC/SecondPaper/Biowulf/Signature_ludmil3/sherlock_profiles.RData',verbose = T)
+load('./data/BBsolution_final3_short.RData',verbose = T)
+load('./data/covdata0.RData',verbose = T)
+load('./data/clinical_data.RData',verbose = T)
+load('./data/sherlock_data_all.RData',verbose = T)
+load('./data/sherlock_variable.RData',verbose = T)
+load('./data/sp_group_data.RData',verbose = T)
+load('./data/id2data.RData',verbose = T)
+load('./data/tedata.RData',verbose = T)
+load('./data/RNASeq_Exp.RData',verbose = T)
+load('./data/Signature_Lumidl.RData',verbose = T)
+load('./data/Signature_Lumidl_CN.RData',verbose = T)
+load('./data/Signature_Lumidl_SV.RData',verbose = T)
+load('./data/sherlock_profiles.RData',verbose = T)
+load('./data/Mutation_Signature_Probability_ID.RData',verbose = T)
+load('./data/Mutation_Signature_Probability_SBS.RData',verbose = T)
+load('./data/Mutation_Signature_Probability_DBS.RData',verbose = T)
+load('./data/Chronological_timing_short.RData',verbose = T)
 
 
 # load function -----------------------------------------------------------
-load('/Users/zhangt8/NIH-Work/EAGLE_NSLC/SecondPaper/Biowulf/ZTW_functions.RData')
-source('/Users/zhangt8/NIH-Work/EAGLE_NSLC/SecondPaper/Biowulf/Sherlock_functions.R')
-
+load('./data/ZTW_functions.RData')
+source('./functions/Sherlock_functions.R')
 
 # load analysis related data set
-load('/Users/zhangt8/NIH-Work/EAGLE_NSLC/SecondPaper/Biowulf/trafic.RData')
+load('./data/trafic.RData')
 
 ## analysis limited to luad only
 hq_samples2 <- covdata0 %>% filter(Histology == 'Adenocarcinoma', Tumor_Barcode %in% hq_samples) %>% pull(Tumor_Barcode)
 rm(list=c('hq_samples'))
 
 
-
-
-# Fig. 4a-b ---------------------------------------------------------------
-
+# Fig. 4a-b -----------------
+#Fig. 4a: This panel illustrates a sample (NSLC-0622-T01) as an example of a tumor harboring L1 insertions from a germline source. In the Circos plot, an arrow indicates the direction from the location of L1 elements in the human germline genome to the position of L1 somatic insertions in the tumor genome. The gray line without an arrow in the Circos plot indicates L1 insertions with an unknown source. L1 retrotranspositions originating from the master L1 on chromosome 22q12.1 (highlighted in blue in the Circos plot) are zoomed in. Different partnered 3’ transductions are highlighted by triangles with various colors on chromosome 22, accompanied by a sequence depth plot (gray bars). A specific partnered 3’ transduction (including the L1 repetitive element and the adjacent unique sequence) between chromosome 22 and chromosome 2 serves as an example of one germline-source L1 retrotransposition.
+#Fig. 4b: This section presents another example (tumor sample NSLC-0832-T01) predominantly characterized by somatic-source L1 insertions. In the Circos plot, a green arrow highlights multiple L1 retrotranspositions detected solely in the tumor genome. For improved visualization of these somatic-source L1 insertions, a zoomed-in view specifically focusing on the somatic retrotransposition between chromosome 3 and chromosome 11 is provided in the second Circos plot. Additionally, a specific partnered 3’ transduction serves to elucidate somatic-source L1 retrotransposition. 
 
 # example of germline dominat sample
 trafic %>% filter(Tumor_Barcode == 'NSLC-0622-T01') %>% count(SRCTYPE,SRCID)
@@ -56,7 +91,7 @@ scols <- c(pal_d3(palette = 'category20')(20)[c(1,19,6)],"gray40")
 names(scols) <- c('22q12.1','11q21','5q14.1','.')
 scols <- scols[bedall$SRCID]
 
-pdf('NSLC-0622-T01_Somatic_transductions.pdf',height = 5,width = 5,family = 'Roboto Condensed')
+pdf('./output/NSLC-0622-T01_Somatic_transductions.pdf',height = 5,width = 5,family = 'Roboto Condensed')
 circos.initializeWithIdeogram()
 circos.genomicLink(bed1, bed2, col = scols , border = NA,directional = -1,arr.length=0.3)
 dev.off()
@@ -77,7 +112,7 @@ trafic_data %>%
   theme_ipsum_rc(axis = F,grid = F, ticks = T)+
   theme(axis.title.x = element_blank(),axis.title.y=element_blank(),axis.text.y = element_blank(),axis.ticks.y=element_blank(),legend.position = 'none')
 
-ggsave(filename = 'tmp.pdf',width = 8,height = 5)
+ggsave(filename = './output/tmp.pdf',width = 8,height = 5)
 
 # example of somatic L1 driven-tumor 
 trafic %>% filter(Tumor_Barcode == 'NSLC-0832-T01') %>% count(SRCTYPE,SRCID)
@@ -95,7 +130,7 @@ scols <- c(pal_d3(palette = 'category20')(20)[c(4,17)],"#01665e","gray40")
 names(scols) <- c('14q23.1','7p14.3','SOMATIC','.')
 scols <- scols[bedall$SRCID]
 
-pdf('NSLC-0832-T01_Somatic_transductions.pdf',height = 5,width = 5,family = 'Roboto Condensed')
+pdf('./output/NSLC-0832-T01_Somatic_transductions.pdf',height = 5,width = 5,family = 'Roboto Condensed')
 circos.initializeWithIdeogram()
 #circos.initializeWithIdeogram(chromosome.index = c("chr11", "chr3"))
 circos.genomicLink(bed1, bed2, col = scols , border = NA,directional = -1,arr.length=0.3)
@@ -105,7 +140,7 @@ dev.off()
 bedall <- bedall %>% filter(SRCTYPE == 'SOMATIC')
 bed1 <- bedall %>% select(chr=CHROM,start=POS,value1=SRCTYPE) %>% mutate(end=start,start=start-100000,end=end+100000) %>% select(chr,start,end,value1) %>% as.data.frame()
 bed2 <- bedall %>% select(chr=chrom,start,end,value2=SRCTYPE) %>% mutate(end=end,start=start-100000,end=end+100000) %>% select(chr,start,end,value2)%>% as.data.frame()
-pdf('NSLC-0832-T01_Somatic_transductions-somatic.pdf',height = 5,width = 5,family = 'Roboto Condensed')
+pdf('./output/NSLC-0832-T01_Somatic_transductions-somatic.pdf',height = 5,width = 5,family = 'Roboto Condensed')
 #circos.initializeWithIdeogram()
 circos.clear()
 circos.initializeWithIdeogram(chromosome.index = c("chr3", "chr11"))
@@ -113,12 +148,10 @@ circos.genomicLink(bed1, bed2, col = '#01665e' , border = NA,directional = -1,ar
 dev.off()
 
 
-
-
 # Fig. 4c -----------------------------------------------------------------
-
+#Distribution of retrotransposable sources of L1 insertions. The bottom pie chart displays the percentage of L1 insertions retrotransposed from germline, somatic, and unknown L1 elements. The top pie chart show the proportion of L1 insertions originating from specific germline L1 masters.
+load('./data/trafic.RData')
 # L1 insertion hotspot
-
 trafic <- trafic %>% mutate(ID=paste(CHROM,POS,REF,sep=':'))
 trdata <- trafic %>% select(ID,Tumor_Barcode,SRC,SRCTYPE,SRCID,SRCGENE,STRAND) %>% separate(SRC,c("chrom","start","end"),sep = '_') %>% mutate(start=as.integer(start),end=as.integer(end)) %>% select(ID,Chromosome=chrom,Position1=start,Position2=end,Strand=STRAND,Associated_gene=SRCGENE,Status=SRCTYPE,SRCID,Tumor_Barcode) %>% unique() %>% 
   left_join(sp_group_data2) %>% 
@@ -149,23 +182,23 @@ trdatatmp <- bind_rows(
 
 trdatatmp <- trdatatmp %>% count(SP_Group_New,Status)
 
-source('~/NIH-Work/R/ZTW_function/ztw.R')
+source('./functions/ztw.R')
 pdfhr2()
 myggstyle()
 PieDonut_ztw(trdatatmp %>% filter(SP_Group_New=='AS_N'),aes(pies=Status,count=n),mainCol = ncicolpal[c(3,1,8)],showNum = FALSE,showRatioPie = TRUE,showRatioThreshold = 0.05,pieLabelSize=5,titlesize = 0,r0=0,title='', showPieName = FALSE,family = 'Roboto Condensed',labelpositionThreshold = 0,ThresholdToLable = T)
-ggsave(filename = 'AS_N_TE_insertions_hq_luad.pdf',width = 4,height = 4)
+ggsave(filename = './output/AS_N_TE_insertions_hq_luad.pdf',width = 4,height = 4)
 
 PieDonut_ztw(trdatatmp %>% filter(SP_Group_New=='EU_N'),aes(pies=Status,count=n),mainCol = ncicolpal[c(3,1,8)],showNum = FALSE,showRatioPie = TRUE,showRatioThreshold = 0.01,pieLabelSize=5,titlesize = 0,r0=0,title='', showPieName = FALSE,family = 'Roboto Condensed',labelpositionThreshold = 0,ThresholdToLable = T)
-ggsave(filename = 'EU_N_TE_insertions_hq_luad.pdf',width = 4,height = 4)
+ggsave(filename = './output/EU_N_TE_insertions_hq_luad.pdf',width = 4,height = 4)
 
 PieDonut_ztw(trdatatmp %>% filter(SP_Group_New=='EU_S'),aes(pies=Status,count=n),mainCol = ncicolpal[c(3,1,8)],showNum = FALSE,showRatioPie = TRUE,showRatioThreshold = 0.01,pieLabelSize=5,titlesize = 0,r0=0,title='', showPieName = FALSE,family = 'Roboto Condensed',labelpositionThreshold = 0,ThresholdToLable = T)
-ggsave(filename = 'EU_S_TE_insertions_hq_luad.pdf',width = 4,height = 4)
+ggsave(filename = './output/EU_S_TE_insertions_hq_luad.pdf',width = 4,height = 4)
 
 PieDonut_ztw(trdatatmp %>% filter(SP_Group_New=='Others'),aes(pies=Status,count=n),mainCol = ncicolpal[c(3,1,8)],showNum = FALSE,showRatioPie = TRUE,showRatioThreshold = 0.01,pieLabelSize=5,titlesize = 0,r0=0,title='', showPieName = FALSE,family = 'Roboto Condensed',labelpositionThreshold = 0,ThresholdToLable = T)
-ggsave(filename = 'Others_TE_insertions_hq_luad.pdf',width = 4,height = 4)
+ggsave(filename = './output/Others_TE_insertions_hq_luad.pdf',width = 4,height = 4)
 
 PieDonut_ztw(trdatatmp %>% filter(SP_Group_New=='ALL'),aes(pies=Status,count=n),mainCol = ncicolpal[c(3,1,8)],showNum = FALSE,showRatioPie = TRUE,showRatioThreshold = 0.01,pieLabelSize=5,titlesize = 0,r0=0,title='', showPieName = FALSE,family = 'Roboto Condensed',labelpositionThreshold = 0,ThresholdToLable = T)
-ggsave(filename = 'ALL_TE_insertions_hq_luad.pdf',width = 4,height = 4)
+ggsave(filename = './output/ALL_TE_insertions_hq_luad.pdf',width = 4,height = 4)
 
 
 tmplevs <- trdata %>% 
@@ -201,8 +234,7 @@ trdata %>%
   guides(fill=guide_legend(nrow = 2))+
   coord_flip()
 
-ggsave('Germline_L1_master_hq_luad_barplots.pdf',width = 7,height = 4,device = cairo_pdf)
-
+ggsave('./output/Germline_L1_master_hq_luad_barplots.pdf',width = 7,height = 4,device = cairo_pdf)
 
 trdatatmp <- trdata %>% 
   mutate(ID=if_else(SRCID %in% tmplevs,SRCID,"Others")) %>% 
@@ -216,23 +248,25 @@ names(tmpcolor) <- rev(tmplevs)
 
 trdatatmp0 <- trdatatmp %>% filter(SP_Group_New=='AS_N')
 PieDonut_ztw(trdatatmp0,aes(pies=ID,count=n),mainCol = tmpcolor,color = 'black',showNum = FALSE,showRatioPie = TRUE,showRatioThreshold = 0.1,pieLabelSize=6,titlesize = 0,r0=0,title='', showPieName = FALSE,family = 'Roboto Condensed',labelpositionThreshold = 0,ThresholdToLable = T)
-ggsave(filename = 'tmp1.pdf',width = 4,height = 4)
+ggsave(filename = './output/tmp1.pdf',width = 4,height = 4)
 
 trdatatmp0 <- trdatatmp %>% filter(SP_Group_New=='EU_N')
 PieDonut_ztw(trdatatmp0,aes(pies=ID,count=n),mainCol = tmpcolor,color = 'black',showNum = FALSE,showRatioPie = TRUE,showRatioThreshold = 0.1,pieLabelSize=6,titlesize = 0,r0=0,title='', showPieName = FALSE,family = 'Roboto Condensed',labelpositionThreshold = 0,ThresholdToLable = T)
-ggsave(filename = 'tmp2.pdf',width = 4,height = 4)
+ggsave(filename = './output/tmp2.pdf',width = 4,height = 4)
 
 trdatatmp0 <- trdatatmp %>% filter(SP_Group_New=='EU_S')
 PieDonut_ztw(trdatatmp0,aes(pies=ID,count=n),mainCol = tmpcolor,color = 'black',showNum = FALSE,showRatioPie = TRUE,showRatioThreshold = 0.1,pieLabelSize=6,titlesize = 0,r0=0,title='', showPieName = FALSE,family = 'Roboto Condensed',labelpositionThreshold = 0,ThresholdToLable = T)
-ggsave(filename = 'tmp3.pdf',width = 4,height = 4)
+ggsave(filename = './output/tmp3.pdf',width = 4,height = 4)
 
 trdatatmp0 <- trdatatmp %>% filter(SP_Group_New=='Others')
 PieDonut_ztw(trdatatmp0,aes(pies=ID,count=n),mainCol = tmpcolor,color = 'black',showNum = FALSE,showRatioPie = TRUE,showRatioThreshold = 0.1,pieLabelSize=6,titlesize = 0,r0=0,title='', showPieName = FALSE,family = 'Roboto Condensed',labelpositionThreshold = 0,ThresholdToLable = T)
-ggsave(filename = 'tmp4.pdf',width = 4,height = 4)
+ggsave(filename = './output/tmp4.pdf',width = 4,height = 4)
 
 
 
 # Fig. 4d -----------------------------------------------------------------
+#Enrichment of mutational signatures in tumors with germline source L1 insertions. The horizontal lines indicate the significance threshold FDR < 0.05 in orange and FDR < 0.01 in red. 
+
 # L1 insertion vs all signautres
 tdata <- sherlock_data_full %>% 
   filter(Type=='Signature_Cosmic_final') %>% 
@@ -294,15 +328,14 @@ tresult %>%
   panel_border(color = 'black',size = 0.5)
 #coord_cartesian(clip = 'off')
 
-ggsave(filename = 'L1_regression_signatures_germline.pdf',width = 6.5,height = 5,device = cairo_pdf())
-ggsave(filename = 'L1_regression_signatures_somatic.pdf',width = 6.5,height = 5,device = cairo_pdf())
+ggsave(filename = './output/L1_regression_signatures_germline.pdf',width = 6.5,height = 5,device = cairo_pdf())
+ggsave(filename = './output/L1_regression_signatures_somatic.pdf',width = 6.5,height = 5,device = cairo_pdf())
 
 
 # Fig. 4e -----------------------------------------------------------------
+#Pearson correlation between deletions attributed to signature ID2 and insertions attributed to signature ID1. Pearson correlation coefficients and corresponding p-values are displayed in the plot.
 
 # ID2_ID1 correlation
-load('../Signature_ludmil3/Signature_Lumidl.RData')
-load('hq_samples2.RData')
 
 #myggstyle()
 ludmil_activity_all %>% 
@@ -317,7 +350,7 @@ ludmil_activity_all %>%
   theme_ipsum_rc(base_size = 12,axis_title_just = 'm',axis_title_size = 14,ticks = T,grid = FALSE,base_family = 'Helvetica') +
   panel_border(color = 'black')
 
-ggsave(file='ID2_ID1_correlation.pdf',width = 5,height = 4)
+ggsave(file='./output/ID2_ID1_correlation.pdf',width = 5,height = 4)
 
 ludmil_activity_all %>% 
   filter(Tumor_Barcode %in% hq_samples2) %>% 
@@ -326,68 +359,64 @@ ludmil_activity_all %>%
 
 
 # Fig. 4f-g -----------------------------------------------------------------
+#Mutational signature profiles and motifs for mutational signature ID1 and ID2, respectively
 # ID2 sequences motif 
-load('../Signature_ludmil/Mutation_Signature_Probability_ID.RData')
-load('../Signature_ludmil/Mutation_Signature_Probability.RData')
-load('../Signature_ludmil/Mutation_Signature_Probability_DBS.RData')
 
 tdata <- Mutation_Signature_Probability_ID %>%
-  filter(ID2==1,MutationsType=='1:Del:T:5') %>% #,str_detect(ID,"T:")
-  select(Tumor_Barcode,ID,Gene_Name,Variant_Classification,AAChange,VAF,CCF,CLASS,MutationsType,ID2) 
+  filter(ID2==1,MutationType=='1:Del:T:5') %>% #,str_detect(ID,"T:")
+  select(Tumor_Barcode,ID,Gene_Name,Variant_Classification,AAChange,VAF,CCF,MutationType,ID2) 
+
+## output for motif analysis
+tdata %>% 
+  filter(Tumor_Barcode %in% hq_samples) %>% 
+  select(Tumor_Barcode,ID) %>% 
+  separate(ID,into = c('chr','pos','ref','alt'),sep = ':') %>% 
+  write_delim('./output/ID2_indels.txt',delim = '\t',col_names = F)
+
+
+tdata <- Mutation_Signature_Probability_ID %>%
+  filter(ID1==1,MutationType=='1:Ins:T:5') %>%
+  select(Tumor_Barcode,ID,Gene_Name,Variant_Classification,AAChange,VAF,CCF,MutationType,ID1) 
 
 
 tdata %>% 
   filter(Tumor_Barcode %in% hq_samples) %>% 
   select(Tumor_Barcode,ID) %>% 
   separate(ID,into = c('chr','pos','ref','alt'),sep = ':') %>% 
-  write_delim('Motif/ID2_indels.txt',delim = '\t',col_names = F)
-
-
-tdata <- Mutation_Signature_Probability_ID %>%
-  filter(ID1==1,MutationsType=='1:Ins:T:5') %>%
-  select(Tumor_Barcode,ID,Gene_Name,Variant_Classification,AAChange,VAF,CCF,CLASS,MutationsType,ID1) 
-
-
-tdata %>% 
-  filter(Tumor_Barcode %in% hq_samples) %>% 
-  select(Tumor_Barcode,ID) %>% 
-  separate(ID,into = c('chr','pos','ref','alt'),sep = ':') %>% 
-  write_delim('Motif/ID1_indels.txt',delim = '\t',col_names = F)
-
+  write_delim('./output/ID1_indels.txt',delim = '\t',col_names = F)
 
 
 tdata <- Mutation_Signature_Probability_DBS %>%
-  filter(DBS2==1,MutationsType=='CC>AA') %>%
-  select(Tumor_Barcode,ID,MutationsType,DBS2) 
+  filter(DBS2==1,MutationType=='CC>AA') %>%
+  select(Tumor_Barcode,ID,MutationType,DBS2) 
 
 tdata %>% 
   filter(Tumor_Barcode %in% hq_samples) %>% 
   select(Tumor_Barcode,ID) %>% 
   separate(ID,into = c('chr','pos'),sep = ':') %>% 
-  write_delim('Motif/DBS2_indels.txt',delim = '\t',col_names = F)
-
+  write_delim('./output/DBS2_indels.txt',delim = '\t',col_names = F)
 
 # seqlog by ggseqlogo
 
-id1seq <- read_delim(file = 'Motif/ID1_seq15.txt',delim = '\t',col_names = F) %>% pull(X1)
+id1seq <- read_delim(file = './data/ID1_seq15.txt',delim = '\t',col_names = F) %>% pull(X1)
 
 ggplot()+
   geom_logo(id1seq,font = 'roboto_bold',rev_stack_order = T)+
   theme_logo()+
   theme(axis.text.x = element_text(size = 8))
 
-ggsave(file='id1_motif.pdf',width = 6,height = 2.5,device = cairo_pdf())
+ggsave(file='./output/id1_motif.pdf',width = 6,height = 2.5,device = cairo_pdf())
 
-id2seq <- read_delim(file = 'Motif/ID2_seq15.txt',delim = '\t',col_names = F) %>% pull(X1)
+id2seq <- read_delim(file = './data/ID2_seq15.txt',delim = '\t',col_names = F) %>% pull(X1)
 
 ggplot()+
   geom_logo(id2seq,font = 'roboto_bold')+
   theme_logo()
 
-ggsave(file='id2_motif.pdf',width = 6,height = 2.5,device = cairo_pdf())
+ggsave(file='./output/id2_motif.pdf',width = 6,height = 2.5,device = cairo_pdf())
 
 
-dbs2seq <- read_delim(file = 'Motif/DBS2_seq15.txt',delim = '\t',col_names = F) %>% pull(X1)
+dbs2seq <- read_delim(file = './data/DBS2_seq15.txt',delim = '\t',col_names = F) %>% pull(X1)
 
 ggplot()+
   geom_logo(dbs2seq,font = 'roboto_bold')+
@@ -396,14 +425,9 @@ ggplot()+
 
 
 # Fig. 4h -----------------------------------------------------------------
+#Pearson correlation between deletions attributed to ID2 and total somatic L1 insertions. Pearson correlation coefficients and corresponding p-values are shown in the plot.
+load('./data/trafic.RData')
 # L1_ID2 
-load('id2data.RData')
-load('../RDS/sherlock_variable.RData')
-load('../MutationTimeR/Chronological_timing_short.RData')
-load('../sp_group_data.RData')
-
-load('../trafic.RData')
-load('../sp_group_data.RData')
 trafic <- trafic %>% filter(CLASS=='L1')%>% mutate(ID=paste(CHROM,POS,REF,sep=':')) %>% mutate(SRCTYPE=if_else(SRCTYPE =='.','Unknow',SRCTYPE))
 trdata <- trafic %>% select(ID,Tumor_Barcode,SRC,SRCTYPE,SRCID,SRCGENE,STRAND) %>% separate(SRC,c("chrom","start","end")) %>% mutate(start=as.integer(start),end=as.integer(end)) %>% select(ID,Chromosome=chrom,Position1=start,Position2=end,Strand=STRAND,Associated_gene=SRCGENE,Status=SRCTYPE,SRCID,Tumor_Barcode) %>% unique() %>% 
   left_join(sp_group_data2)
@@ -411,8 +435,6 @@ trdata <- trafic %>% select(ID,Tumor_Barcode,SRC,SRCTYPE,SRCID,SRCGENE,STRAND) %
 trdata <- trdata %>% filter(Tumor_Barcode %in% hq_samples2)
 
 tmp <- trdata %>% count(Tumor_Barcode,Status) %>% pivot_wider(names_from = Status,values_from = n,values_fill = 0)
-
-
 
 # tdata <- id2data %>% 
 #   left_join(
@@ -442,7 +464,7 @@ tdata %>%
   theme_ipsum_rc(base_size = 12,plot_title_size = 12,axis_title_size = 16,axis_title_just = "m",grid = FALSE,axis = "XY",ticks = TRUE)+
   panel_border(color = 'black')
 
-ggsave(filename = 'L1_ID2.pdf',width = 5,height = 4,device = cairo_pdf)
+ggsave(filename = './output/L1_ID2.pdf',width = 5,height = 4,device = cairo_pdf)
 
 tdata %>% 
   filter(ID2>0,`GERMLINE`>0) %>% 
@@ -455,7 +477,7 @@ tdata %>%
   theme_ipsum_rc(base_size = 12,plot_title_size = 12,axis_title_size = 16,axis_title_just = "m",grid = FALSE,axis = "XY",ticks = TRUE)+
   panel_border(color = 'black')
 
-ggsave(filename = 'L1_ID2_germline.pdf',width = 5,height = 4,device = cairo_pdf)
+ggsave(filename = './output/L1_ID2_germline.pdf',width = 5,height = 4,device = cairo_pdf)
 
 
 tdata %>% 
@@ -469,7 +491,7 @@ tdata %>%
   theme_ipsum_rc(base_size = 12,plot_title_size = 12,axis_title_size = 16,axis_title_just = "m",grid = FALSE,axis = "XY",ticks = TRUE)+
   panel_border(color = 'black')
 
-ggsave(filename = 'L1_ID2_somatic.pdf',width = 5,height = 4,device = cairo_pdf)
+ggsave(filename = './output/L1_ID2_somatic.pdf',width = 5,height = 4,device = cairo_pdf)
 
 
 

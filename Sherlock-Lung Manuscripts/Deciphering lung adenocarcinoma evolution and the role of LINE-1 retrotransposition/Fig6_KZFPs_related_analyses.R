@@ -1,41 +1,73 @@
-set_wd()
-libztw()
-pdfhr2()
+# ------------------------------------------------------------------------------
+# Script: Figure 6 - Tumor Evolution Analysis (LUAD cohort)
+# Description: This script reproduces all main analyses and figures for tumor 
+# evolution in high-quality LUAD samples.
+# ------------------------------------------------------------------------------
 
+# --- Load Required Libraries and Set Plotting Styles ---------------------------
+# (You may need to install some packages if missing)
+library(tidyverse)
+library(ggplot2)
+library(ggsankey)
+library(scales)
+library(hrbrthemes)   # For theme_ipsum_rc
+library(cowplot)
+library(forcats)
+library(ggrepel)
+library(ggnewscale)
+library(data.table)
+library(ggasym)
+library(ggpmisc)
+library(broom)
+library(ggsci)
+library(ggpubr)
 
+# --- Define Helper Functions (if any custom) -----------------------------------
+# Please source your custom functions here if needed, or place them in ./functions/
+# source('./functions/your_custom_functions.R')
+
+# --- Load Input Datasets ------------------------------------------------------
+# All data files should be placed in the appropriate subfolders.
+# Example folder structure:
+#   ./data/           - for main input files
+#   ./functions/      - for custom R functions
+#   ./output/         - for saving plots and results
+
+# Replace the filenames below with your actual dataset filenames.
 # load Sherlock-lung data -------------------------------------------------
-load('/Users/zhangt8/NIH-Work/EAGLE_NSLC/SecondPaper/Biowulf/BBsolution_final3_short.RData')
-load('/Users/zhangt8/NIH-Work/EAGLE_NSLC/SecondPaper/Biowulf/covdata0.RData')
-load('/Users/zhangt8/NIH-Work/EAGLE_NSLC/SecondPaper/Biowulf/RDS/sherlock_data_all.RData')
-load('/Users/zhangt8/NIH-Work/EAGLE_NSLC/SecondPaper/Biowulf/RDS/sherlock_variable.RData')
-
-load('/Users/zhangt8/NIH-Work/EAGLE_NSLC/SecondPaper/Biowulf/sp_group_data.RData')
-
-load('/Users/zhangt8/NIH-Work/EAGLE_NSLC/SecondPaper/Biowulf/ID2_TE/id2data.RData')
-load('/Users/zhangt8/NIH-Work/EAGLE_NSLC/SecondPaper/Biowulf/ID2_TE/tedata.RData')
-
-load('~/NIH-Work/R/annotable_ens90.RData')
+load('./data/BBsolution_final3_short.RData',verbose = T)
+load('./data/covdata0.RData',verbose = T)
+load('./data/sherlock_data_all.RData',verbose = T)
+load('./data/sherlock_variable.RData',verbose = T)
+load('./data/sp_group_data.RData',verbose = T)
+load('./data/id2data.RData',verbose = T)
+load('./data/tedata.RData',verbose = T)
+load('./data/annotable_ens90.RData',verbose = T)
 protein_coding_genes <- grch38 %>% filter(biotype=='protein_coding') %>% pull(symbol) %>% unique()
 
 # load function -----------------------------------------------------------
-load('/Users/zhangt8/NIH-Work/EAGLE_NSLC/SecondPaper/Biowulf/ZTW_functions.RData')
+load('./data/ZTW_functions.RData')
 
 # load analysis related data set
-load('/Users/zhangt8/NIH-Work/EAGLE_NSLC/SecondPaper/Biowulf/KZFPs/kzfp_genes.RData')
-load('/Users/zhangt8/NIH-Work/EAGLE_NSLC/SecondPaper/Biowulf/RNASeq/RNASeq_Exp.RData',verbose = T)
+load('./data/kzfp_genes.RData')
+load('./data/RNASeq_Exp.RData',verbose = T)
 
-## analysis limitated to luad only
-hq_samples2 <- covdata0 %>% filter(Histology == 'Adenocarcinoma', Tumor_Barcode %in% hq_samples) %>% pull(Tumor_Barcode)
-lq_samples2 <- covdata0 %>% filter(Histology == 'Adenocarcinoma', !(Tumor_Barcode %in% hq_samples)) %>% pull(Tumor_Barcode)
+# --- Subset to LUAD Only ------------------------------------------------------
+# Filter to high-quality LUAD samples only
+hq_samples2 <- covdata0 %>%
+  filter(Histology == 'Adenocarcinoma', Tumor_Barcode %in% hq_samples) %>%
+  pull(Tumor_Barcode)
+rm(list = c('hq_samples'))
+
 
 id2data <- id2data %>% filter(Tumor_Barcode %in% hq_samples2)
-
 tedata <- tedata %>% filter(Tumor_Barcode %in% hq_samples2)
-
 rdata1 <- rdata1 %>% filter(Tumor_Barcode %in% hq_samples2, Gene %in% kzfp_genes,Gene %in% protein_coding_genes)
 
 
-# Fig. 6a: expression difference between IDs Present and Absent in tumors  --------
+# Fig. 6a: Expression difference of KZFP protein coding genes between IDs Present and Absent in tumors  --------
+#Analysis of differentially expressed KZFP protein coding genes between tumors with ID2 signatures and those without. Horizontal dashed lines represent significance thresholds (FDR < 0.05 in orange and FDR < 0.01 in red). The top 20 significant genes are annotated with gene names. 
+
 rdata1 <- rdata1 %>% left_join(id2data %>% select(Tumor_Barcode,ID2,ID2_Present)) %>% filter(!is.na(ID2_Present))
 rdata1 <- rdata1 %>% 
   left_join(
@@ -48,6 +80,7 @@ rdata1 <- rdata1 %>%
     sherlock_data_full %>% filter(Gene == 'EGFR', Type=='Mutation_Driver') %>% select(Tumor_Barcode,EGFR=Alteration)
   )
 
+rdata1 <- rdata1 %>% left_join(covdata0 %>% select(Tumor_Barcode,Smoking,Gender,Age))
 
 fcdata <- rdata1 %>% 
   filter(RNAseq_Type == 'Tumor') %>% 
@@ -100,13 +133,14 @@ tresult %>%
   panel_border(color = 'black',size = 0.5)
 
 #ggsave(filename = 'KZFPs_DEGs_tumor_ID2_present_absent.pdf',width = 7,height = 6,device = cairo_pdf)
-ggsave(filename = 'KZFPs_DEGs_tumor_ID2_present_absent_multivariable.pdf',width = 7,height = 6,device = cairo_pdf)
+ggsave(filename = './output/KZFPs_DEGs_tumor_ID2_present_absent_multivariable.pdf',width = 7,height = 6,device = cairo_pdf)
 
 
 
 
+# Fig. 6b: ZNF695 expression difference among ID2 present and absent group-----------------------------------------------------------------
+#Box plots illustrate the differential expression of ZNF695 among normal tissue or blood, tumors without ID2 signatures, and tumors with ID2 signatures. 
 
-# Fig. 6b ZNF695 expression difference among ID2 present and absent group-----------------------------------------------------------------
 my_comparisons <- list(c("Normal", "Tumor-ID2 absent"),c("Normal", "Tumor-ID2 present"),c("Tumor-ID2 absent", "Tumor-ID2 present"))
 
 rdata1 %>% 
@@ -123,10 +157,11 @@ rdata1 %>%
   panel_border(color = 'black',linetype = 1)+
   stat_compare_means(comparisons = my_comparisons)
 
-ggsave(filename = 'KZFPs_DEGs_tumor_ID2_present_absent_example.pdf',width = 4,height = 7,device = cairo_pdf)
+ggsave(filename = './output/KZFPs_DEGs_tumor_ID2_present_absent_example.pdf',width = 4,height = 7,device = cairo_pdf)
 
 # adjusted for the cofounders e.g, smoking status, TP53, KRAS mutant status
 tmpresult <- rdata1 %>% 
+  mutate(Smoking=if_else(Smoking == 'Unknown',NA_character_,Smoking)) %>% 
   filter(Gene=='ZNF695',RNAseq_Type == 'Tumor') %>% 
   mutate(ID2_Present=as.factor(ID2_Present)) %>%
   do(tidy(glm(ID2_Present ~ Exp + Smoking + Age + Gender + TP53 + KRAS + EGFR, family='binomial',data=.,),conf.int = TRUE, conf.level = 0.95)) %>% 
@@ -141,6 +176,7 @@ tmpresult <- rdata1 %>%
 
 tmpresult %>% 
   mutate(p.value2 = if_else(p.value>0.05,NA,-log10(p.value))) %>% 
+  #mutate(conf.high = if_else(conf.high>10,NA,conf.high)) %>% 
   #mutate(term=factor(term,levels=tmplevels,labels=tmplables)) %>% 
   mutate(term=fct_inorder(term)) %>% 
   ggplot(aes(estimate, term, xmin = conf.low, xmax = conf.high, height = 0,color=p.value2)) +
@@ -158,10 +194,12 @@ tmpresult %>%
   scale_x_continuous(breaks = pretty_breaks())+
   panel_border(color = 'black',linetype = 1)
 
-ggsave(filename = 'KZFPs_DEGs_tumor_ID2_present_absent_example2.pdf',width = 6,height = 4,device = cairo_pdf)
-  
+ggsave(filename = './output/KZFPs_DEGs_tumor_ID2_present_absent_example2.pdf',width = 6,height = 4,device = cairo_pdf)
+
 
 # Fig. 6c: Correlation with ID2 ----------------------------------------------
+#Pearson correlations between KZFP protein-coding gene expression and indels attributed to mutational signature ID2. Horizontal dashed lines indicate significance thresholds (FDR < 0.05 in orange and FDR < 0.01 in red). The top 20 significant genes are annotated with gene names.
+
 # pearson correlation
 # tresult <- rdata1 %>%
 #   filter(RNAseq_Type == 'Tumor') %>%
@@ -187,7 +225,7 @@ tresult <- rdata1 %>%
   arrange(p.value) %>% 
   mutate(FDR=p.adjust(p.value,method="BH")) %>% 
   left_join(kzfp %>% select(Gene=Label,chrom))
-  
+
 
 tresult %>% 
   ggplot(aes(estimate,-log10(FDR),fill=chrom))+
@@ -207,9 +245,11 @@ tresult %>%
 
 
 #ggsave(filename = 'KZFPs_tumor_ID2_correlation.pdf',width = 7,height = 6,device = cairo_pdf)
-ggsave(filename = 'KZFPs_tumor_ID2_correlation_mutivariable.pdf',width = 7,height = 6,device = cairo_pdf)
+ggsave(filename = './output/KZFPs_tumor_ID2_correlation_mutivariable.pdf',width = 7,height = 6,device = cairo_pdf)
 
 # Fig. 6d: individual correction ------------------------------------------
+#Correlation between ZNF695 expression and deletions attributed to mutational signature ID2. Pearson correlation coefficients and corresponding p-values are displayed above the plot.
+
 rdata1 %>% 
   filter(RNAseq_Type == 'Tumor') %>% 
   left_join(id2data %>% select(Tumor_Barcode,ID2)) %>% 
@@ -226,7 +266,7 @@ rdata1 %>%
   panel_border(color = 'black',linetype = 1,size=0.5)+
   guides(fill="none")
 
-ggsave(filename = 'KZFPs_tumor_ID2_correlation_example.pdf',width = 6,height = 5,device = cairo_pdf)
+ggsave(filename = './output/KZFPs_tumor_ID2_correlation_example.pdf',width = 6,height = 5,device = cairo_pdf)
 
 # adjust for the covariables
 tmpresult <- rdata1 %>% 
@@ -262,23 +302,23 @@ tmpresult %>%
   scale_x_continuous(breaks = pretty_breaks())+
   panel_border(color = 'black',linetype = 1)
 
-ggsave(filename = 'KZFPs_tumor_ID2_correlation_example2.pdf',width = 6,height = 4,device = cairo_pdf)
+ggsave(filename = './output/KZFPs_tumor_ID2_correlation_example2.pdf',width = 6,height = 4,device = cairo_pdf)
 
 
 
-
-
-
-# Fig. 6e -----------------------------------------------------------------
+# Fig. 6e ----------------------------------------------------------------
+#Correlation between ZNF695 RNA-Seq expression and the median of DNA methylation levels across the genome locations of the CpG island on chr22q12.1. Pearson correlation coefficients and corresponding p-values are displayed. 
 # codes generated Fig. 6e can be found in the Fig5_LINE1_Methylation.R 
 
 
 
 # Fig. 6f -----------------------------------------------------------------
+#Differentially expressed ZNF695 target genes identified between tumors with and without mutational signature ID2.
+
 ZNF695_targets <- unique(c("UBR5", "PPP2R1A", "PPP2R1B", "PSMB3", "PPP4C", "HECTD3", "USP9X", "BRE", "HECTD1", "TIMM50", "PPP2CB", "PSMC3", "PSMD3", "PSMD6", "PSMA6", "PSMA3", "PDCD5", "PSMD11", "DDI2", "PSMC1", "PSMC2", "PSMD7", "PSMC5", "DNAJA1", "PSMA2", "PSMC6","MEOX2", "TRIM28", "HECTD1", "H2BC21","MER4D", "MER4D1", "HAL1-2a_MD"))
 length(ZNF695_targets)
 
-load('tresult_wilcox_ID2.RData',verbose = T)
+load('./data/tresult_wilcox_ID2.RData',verbose = T)
 
 tresult <- tresult %>% 
   filter(Gene %in% ZNF695_targets) %>% 
@@ -302,16 +342,16 @@ tresult %>%
   theme(legend.position = 'top')+
   panel_border(color = 'black',size = 0.5)
 
-ggsave(filename = 'tresult_wilcox_ID2_ZNF695_targets.pdf',width = 6,height = 6,device = cairo_pdf)
+ggsave(filename = './output/tresult_wilcox_ID2_ZNF695_targets.pdf',width = 6,height = 6,device = cairo_pdf)
 
 geneset1 <- tresult$Gene
 
 # general target genes for kzfps
-kzfps_targets <- read_xlsx('Caleb/ID2 Paper - KRAB-ZFP Target Genes Master List.xlsx',skip = 1,col_names = T) %>% pull(`Target Genes`)
+kzfps_targets <- readxl::read_xlsx('./data/ID2 Paper - KRAB-ZFP Target Genes Master List.xlsx',skip = 1,col_names = T) %>% pull(`Target Genes`)
 
 length(kzfps_targets)
 
-load('tresult_wilcox_ID2.RData',verbose = T)
+load('./data/tresult_wilcox_ID2.RData',verbose = T)
 
 tresult <- tresult %>% 
   filter(Gene %in% kzfps_targets) %>% 
@@ -335,7 +375,6 @@ tresult %>%
   theme(legend.position = 'top')+
   panel_border(color = 'black',size = 0.5)
 
-ggsave(filename = 'tresult_wilcox_ID2_KZFPs_targets.pdf',width = 6,height = 6,device = cairo_pdf)
-
+ggsave(filename = './output/tresult_wilcox_ID2_KZFPs_targets.pdf',width = 6,height = 6,device = cairo_pdf)
 
 

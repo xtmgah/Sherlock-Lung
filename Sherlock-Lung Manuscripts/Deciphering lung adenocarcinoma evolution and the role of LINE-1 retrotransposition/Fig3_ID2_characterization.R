@@ -1,56 +1,74 @@
-set_wd()
-libztw()
-pdfhr2()
-myggstyle()
+# ------------------------------------------------------------------------------
+# Script: Figure 3 - Tumor Evolution Analysis (LUAD cohort)
+# Description: This script reproduces all main analyses and figures for tumor 
+# evolution in high-quality LUAD samples.
+# ------------------------------------------------------------------------------
 
-# load Sherlock-lung data -------------------------------------------------
-load('/Users/zhangt8/NIH-Work/EAGLE_NSLC/SecondPaper/Biowulf/BBsolution_final3_short.RData')
-load('/Users/zhangt8/NIH-Work/EAGLE_NSLC/SecondPaper/Biowulf/covdata0.RData')
-load('/Users/zhangt8/NIH-Work/EAGLE_NSLC/SecondPaper/Biowulf/Clinical/clinical_data.RData')
-load('/Users/zhangt8/NIH-Work/EAGLE_NSLC/SecondPaper/Biowulf/RDS/sherlock_data_all.RData')
-load('/Users/zhangt8/NIH-Work/EAGLE_NSLC/SecondPaper/Biowulf/RDS/sherlock_variable.RData')
+# --- Load Required Libraries and Set Plotting Styles ---------------------------
+# (You may need to install some packages if missing)
+library(tidyverse)
+library(ggplot2)
+library(ggsankey)
+library(scales)
+library(hrbrthemes)   # For theme_ipsum_rc
+library(cowplot)
+library(forcats)
+library(ggrepel)
+library(ggnewscale)
+library(data.table)
+library(ggasym)
+library(ggpmisc)
+library(broom)
+library(ggsci)
 
-load('/Users/zhangt8/NIH-Work/EAGLE_NSLC/SecondPaper/Biowulf/RDS/sherlock_variable.RData')
+# --- Define Helper Functions (if any custom) -----------------------------------
+# Please source your custom functions here if needed, or place them in ./functions/
+# source('./functions/your_custom_functions.R')
 
-load('/Users/zhangt8/NIH-Work/EAGLE_NSLC/SecondPaper/Biowulf/sp_group_data.RData')
+# --- Load Input Datasets ------------------------------------------------------
+# All data files should be placed in the appropriate subfolders.
+# Example folder structure:
+#   ./data/           - for main input files
+#   ./functions/      - for custom R functions
+#   ./output/         - for saving plots and results
 
-load('/Users/zhangt8/NIH-Work/EAGLE_NSLC/SecondPaper/Biowulf/ID2_TE/id2data.RData')
-load('/Users/zhangt8/NIH-Work/EAGLE_NSLC/SecondPaper/Biowulf/ID2_TE/tedata.RData')
+# Replace the filenames below with your actual dataset filenames.
+load('./data/BBsolution_final3_short.RData')
+load('./data/covdata0.RData')
+load('./data/clinical_data.RData')
+load('./data/sherlock_data_all.RData')
+load('./data/sherlock_variable.RData')
+load('./data/sp_group_data.RData')
+load('./data/id2data.RData')
+load('./data/tedata.RData')
+load('./data/suvdata.RData',verbose = T)
 
-load('/Users/zhangt8/NIH-Work/EAGLE_NSLC/SecondPaper/Biowulf/RNASeq/RNASeq_Exp.RData',verbose = T)
-load('/Users/zhangt8/NIH-Work/EAGLE_NSLC/SecondPaper/Biowulf/Signature_ludmil3/Signature_Lumidl_CN.RData',verbose = T)
-load('/Users/zhangt8/NIH-Work/EAGLE_NSLC/SecondPaper/Biowulf/Signature_ludmil3/Signature_Lumidl_SV.RData',verbose = T)
-load('/Users/zhangt8/NIH-Work/EAGLE_NSLC/SecondPaper/Biowulf/Signature_ludmil3/sherlock_profiles.RData',verbose = T)
+load('./data/RNASeq_Exp.RData',verbose = T)
+load('./data/Signature_Lumidl_CN.RData',verbose = T)
+load('./data/Signature_Lumidl_SV.RData',verbose = T)
+load('./data/sherlock_profiles.RData',verbose = T)
 
 
 # load function -----------------------------------------------------------
-load('/Users/zhangt8/NIH-Work/EAGLE_NSLC/SecondPaper/Biowulf/ZTW_functions.RData')
-#source('/Users/zhangt8/NIH-Work/EAGLE_NSLC/SecondPaper/Biowulf/ZTW_functions.R')
-source('/Users/zhangt8/NIH-Work/EAGLE_NSLC/SecondPaper/Biowulf/Sherlock_functions.R')
-
+load('./data/ZTW_functions.RData')
+#source('./data/ZTW_functions.R')
+source('./functions/Sherlock_functions.R')
 
 # load analysis related data set
-load('/Users/zhangt8/NIH-Work/EAGLE_NSLC/SecondPaper/Biowulf/MutationTimeR_HQ_LUAD/Chronological_timing_short.RData',verbose = T)
+load('./data/Chronological_timing_short.RData',verbose = T)
 tmp <- colnames(MRCAdata)
 MRCAdata <- MRCAdata %>% select(-SP_Group) %>% left_join(sp_group_data2) %>% select(-SP_Group_New) %>% select(one_of(tmp))
 
-load('/Users/zhangt8/NIH-Work/EAGLE_NSLC/SecondPaper/Biowulf/Survival/suvdata.RData',verbose = T)
 ## analysis limited to luad only
 hq_samples2 <- covdata0 %>% filter(Histology == 'Adenocarcinoma', Tumor_Barcode %in% hq_samples) %>% pull(Tumor_Barcode)
 rm(list=c('hq_samples'))
 
 
 
-
-
-# Fig. 3a-b -----------------------------------------------------------------
-
-
+# Fig. 3a-b: Association between Cell Proliferation Marker Gene Expression and Mutational Signature ID2 ---------------------------------------------------------------------------
 # ID2 with all proliferation markers
 genelist <- c('MKI67','TOP2A','MYBL2','BUB1','PLK1','CCNE1','CCNB1','BUB1','FOXM1')
-load('../RDS/sherlock_data_all.RData')
 tdata <- rdata1 %>% filter(Gene %in% genelist)
-load('../ID2_TE/id2data.RData')
 
 tdata <- id2data %>% 
   filter(Tumor_Barcode %in% hq_samples2) %>% 
@@ -87,7 +105,7 @@ tdata %>%
   panel_border(color = 'black',size = 0.5)+
   coord_cartesian(clip = 'off')
 
-ggsave(filename = 'ID2_Proliferation_Markers.pdf',width = 5,height = 5,device = cairo_pdf())
+ggsave(filename = './output/ID2_Proliferation_Markers.pdf',width = 5,height = 5,device = cairo_pdf())
 
 
 tdata %>% 
@@ -117,7 +135,7 @@ ggcorrplot(corr,method = "circle",insig = "blank",
            p.mat = p.mat,
            lab = TRUE)
 
-ggsave(filename = 'ID2_Proliferation_Markers2.pdf',width = 5,height = 5,device = cairo_pdf())
+ggsave(filename = './output/ID2_Proliferation_Markers2.pdf',width = 5,height = 5,device = cairo_pdf())
 
 
 
@@ -134,7 +152,7 @@ tdata %>%
   theme(axis.text.x = element_text(angle = 45,hjust = 1,vjust = 1),panel.spacing = unit(0.1,'cm'))+
   panel_border(color = 'black',linetype = 1)
 
-ggsave('ID2_Proliferation_RNASeq.pdf',width = 10,height = 9,device = cairo_pdf)
+ggsave('./output/ID2_Proliferation_RNASeq.pdf',width = 10,height = 9,device = cairo_pdf)
 
 tdata %>% 
   group_by(RNAseq_Type,Gene) %>% 
@@ -165,7 +183,7 @@ tdata %>%
   panel_border(color = 'black',linetype = 1,size=0.5)+
   guides(fill="none")
 
-ggsave('ID2_Proliferation_RNASeq_tumor.pdf',width = 8,height = 5.5,device = cairo_pdf)
+ggsave('./output/ID2_Proliferation_RNASeq_tumor.pdf',width = 8,height = 5.5,device = cairo_pdf)
 
 
 tmp <- tdata %>% 
@@ -192,13 +210,13 @@ tdata %>%
   panel_border(color = 'black',linetype = 1,size=0.5)+
   guides(fill="none")
 
-ggsave('ID2_Proliferation_RNASeq_normal.pdf',width = 8,height = 5.5,device = cairo_pdf)
+ggsave('./output/ID2_Proliferation_RNASeq_normal.pdf',width = 8,height = 5.5,device = cairo_pdf)
 
 
-# Fig. 3c-------------------------------------------------------------------
+# Fig. 3c: Association between mutational signature ID2 and survival----------------------------------------------------------------------------
+
 # ID2 survival 
-load('../covdata0.RData')
-source('../Survival/Survival_function.R')
+source('./functions/Survival_function.R')
 
 suvdata <- suvdata %>% left_join(wgs_groups_info %>% select(Tumor_Barcode,SP_Group))
 suvdata <- suvdata %>% 
@@ -216,10 +234,10 @@ suvdata_tmp <- id2data %>%
 SurvZTWms(suvdata_input = suvdata_tmp,plot = TRUE,keyname='Mutational Signature ID2: ',gcolors = as.character(id2color),pvalsize = 4,width = 5,height = 5,filename = 'ID2-survival.pdf')
 SurvZTWms_tp53(suvdata_input = suvdata_tmp,plot = TRUE,keyname='Mutational Signature ID2: ',gcolors = as.character(id2color),pvalsize = 4,width = 5,height = 4,filename = 'ID2-survival-tp53.pdf')
 
+## check the output pdf file for the survival plots
 
 
-# Fig. 3d ------------------------------------------------------------------
-#load('hq_samples2.RData')
+# Fig. 3d Mutational signature ID2 vs Tumor Metastasis------------------------------------------------------------------
 clinical_data %>% select(Tumor_Barcode,Metastasis_old)
 
 tdata <- id2data %>% 
@@ -238,7 +256,7 @@ tdata %>% group_by(SP_Group_New) %>% do(tidy(fisher.test(.$ID2_Present,.$Metasta
 tdata %>% filter(ID2>0) %>%  do(tidy(wilcox.test(ID2~Metastasis,data=.)))
 
 my_comparisons = list(c('Yes','No'))
-myggstyle()
+#myggstyle()
 tdata %>% 
   filter(ID2>0) %>% 
   ggplot(aes(Metastasis,log2(ID2)))+
@@ -253,30 +271,25 @@ tdata %>%
   panel_border(color = 'black',linetype = 1)+
   stat_compare_means(comparisons = my_comparisons)
 
-ggsave(file='ID2_metastasis2.pdf',width = 3,height = 6,device = cairo_pdf)
 ggsave(file='ID2_metastasis.pdf',width = 2,height = 6,device = cairo_pdf)
 
+# overall
+barplot_fisher(tdata,'ID2_Present','Metastasis',var1lab = 'Mutational signature ID2',var2lab = 'Tumor metastasis')
 
-barplot_fisher(tdata,'ID2_Present','Metastasis',var1lab = 'Mutational signature ID2',var2lab = 'Tumor metastasis',filename = 'ID2_metastasis_enrchment.pdf')
+# TP53 wildtype
+barplot_fisher(tdata %>% filter(TP53_Status=='TP53 wildtype'),'ID2_Present','Metastasis',var1lab = 'Mutational signature ID2',var2lab = 'Tumor metastasis')
 
-barplot_fisher(tdata %>% filter(TP53_Status=='TP53 wildtype'),'ID2_Present','Metastasis',var1lab = 'Mutational signature ID2',var2lab = 'Tumor metastasis',filename = 'ID2_metastasis_enrchment_tp53_wildtype.pdf')
-
-barplot_fisher(tdata %>% filter(TP53_Status=='TP53 mutant'),'ID2_Present','Metastasis',var1lab = 'Mutational signature ID2',var2lab = 'Tumor metastasis',filename = 'ID2_metastasis_enrchment_tp53_mutant.pdf')
+# TP53 mutant
+barplot_fisher(tdata %>% filter(TP53_Status=='TP53 mutant'),'ID2_Present','Metastasis',var1lab = 'Mutational signature ID2',var2lab = 'Tumor metastasis')
 
 tdata %>% 
   left_join(covdata0) %>%
   filter(Smoking=='Non-Smoker') %>% 
   do(tidy(glm(Metastasis ~ ID2_Present + TP53_Status + Tumor_Purity + Age + Gender, family='binomial',data=.)))
 
+# Fig. 3e Genomic Features Association with mutational signature ID----------------
 
-
-# Fig. 3e -----------------------------------------------------------------
-# Association with ID2 tumors
-load('id2data.RData')
-load('../RDS/sherlock_data_all.RData')
-load('../BBsolution_final3_short.RData')
-load('../covdata0.RData')
-drglist <- readRDS('../../../Collaborators/Nuria/Update2/drivers_intogene.RDS') %>% pull(symbol)
+drglist <- readRDS('./data/drivers_intogene.RDS') %>% pull(symbol)
 drglist <- unique(c(drglist,c('RET','ALK','AXL','NRG1','MET','FGFR2','ROS1','RB1','ERBB4','EGFR')))
 
 drglist <- c(drglist,paste0(drglist,'-Amp'),paste0(drglist,'-Del'))
@@ -324,13 +337,9 @@ tresult %>%
   theme_ipsum_rc(base_size = 14,axis_title_just = 'm',axis_title_size = 16,grid='XY',ticks = T)+
   panel_border(color = 'black',size = 0.5)
 
-ggsave(filename = 'ID2_hq_tumor_genomic_association.pdf',width = 7.5,height = 5,device = cairo_pdf)
+ggsave(filename = './output/ID2_hq_tumor_genomic_association.pdf',width = 7.5,height = 5,device = cairo_pdf)
 
-
-
-
-
-# Fig. 3f -----------------------------------------------------------------
+# Fig. 3f Assocaition between Hypoxia score and mutational signature ID2 ------------------------------------------------------------
 
 # ID2 and hypoxia 
 library(ggdist)
@@ -366,8 +375,7 @@ tdata %>%
   theme(legend.position = 'top')+
   panel_border(color = 'black',linetype = 1)
 
-ggsave(file='ID2_hypoxia_score.pdf',width = 9,height = 9,device = cairo_pdf)
-
+ggsave(file='./output/ID2_hypoxia_score.pdf',width = 9,height = 9,device = cairo_pdf)
 
 
 tdata %>% group_by(SP_Group_New) %>% do(tidy(wilcox.test(value~ID2_Present,data=.)))
@@ -376,11 +384,11 @@ tdata %>% group_by(SP_Group_New) %>% do(tidy(wilcox.test(value~ID2_Present,data=
 
 
 
-# Others ------------------------------------------------------------------
+# Additional Supplementary Figures ------------------------------------------------------------------
 
 
 # ATR -  CHECK1  vs ID2 -------------------------------------------------------------------------
-load('../ID2_TE/id2data.RData')
+
 tdata <- rdata1 %>% filter(Gene %in% c('CHEK1','CHEK2'))
 
 tdata <- id2data %>% 
@@ -402,7 +410,7 @@ tdata %>%
   scale_fill_manual(values = c("#01665e","#ff7f00"))+
   guides(fill="none")
 
-ggsave('ID2_Checkpoint_RNASeq.pdf',width = 5,height = 8,device = cairo_pdf)
+ggsave('./output/ID2_Checkpoint_RNASeq.pdf',width = 5,height = 8,device = cairo_pdf)
 
 tdata %>% 
   group_by(RNAseq_Type,Gene) %>% 
@@ -424,8 +432,7 @@ tdata %>%
   panel_border(color = 'black',linetype = 1)+
   guides(fill="none")
 
-ggsave('ID2_Checkpoint_RNASeq2.pdf',width = 4.5,height = 8,device = cairo_pdf)
-
+ggsave('./output/ID2_Checkpoint_RNASeq2.pdf',width = 4.5,height = 8,device = cairo_pdf)
 
 tdata %>% 
   group_by(RNAseq_Type,Gene) %>% 
@@ -438,12 +445,6 @@ tdata %>%
 #   group_by(RNAseq_Type,ID2) %>% 
 #   summarise(mvalue=median(Exp))
 # 
-
-
-
-
-
-
 
 # Figure xxx: ID2 association with SV count and signature -----------------------------
 my_comparisons <- list(c("Absent",'Present'))
@@ -494,7 +495,7 @@ tdata %>%
   panel_border(color = 'black',linetype = 1)+
   stat_compare_means(comparisons = my_comparisons)
 
-ggsave(filename = 'SV_subtypes_ID2_present_vs_absent.pdf',width = 6,height = 8,device = cairo_pdf)
+ggsave(filename = './output/SV_subtypes_ID2_present_vs_absent.pdf',width = 6,height = 8,device = cairo_pdf)
 
 my_comparisons <- list(c("Absent",'Present'))
 
@@ -522,11 +523,11 @@ tdata %>%
   panel_border(color = 'black',linetype = 1)+
   stat_compare_means(comparisons = my_comparisons)
 
-ggsave(filename = 'SV_ID2_present_vs_absent_Smoking.pdf',width = 4,height = 6,device = cairo_pdf)
+ggsave(filename = './output/SV_ID2_present_vs_absent_Smoking.pdf',width = 4,height = 6,device = cairo_pdf)
 
 # # Figure xxx: ID2 association with PGA and CNV signature ----------------
 my_comparisons <- list(c("Absent",'Present'))
-load('../sherlock_PGA.RData',verbose = T)
+load('./data/sherlock_PGA.RData',verbose = T)
 
 tdata <- sherlock_PGA %>% 
   left_join(id2data) %>% 
@@ -547,11 +548,10 @@ tdata %>%
   panel_border(color = 'black',linetype = 1)+
   stat_compare_means(comparisons = my_comparisons)
 
-ggsave(filename = 'PGA_ID2_present_vs_absent.pdf',width = 2.7,height = 6,device = cairo_pdf)
-
+ggsave(filename = './output/PGA_ID2_present_vs_absent.pdf',width = 2.7,height = 6,device = cairo_pdf)
 
 my_comparisons <- list(c("Absent",'Present'))
-load('../sherlock_PGA.RData',verbose = T)
+
 
 tdata <- sherlock_PGA %>% 
   left_join(id2data) %>% 
@@ -575,35 +575,33 @@ tdata %>%
   panel_border(color = 'black',linetype = 1)+
   stat_compare_means(comparisons = my_comparisons)
 
-ggsave(filename = 'PGA_ID2_present_vs_absent_smoking.pdf',width = 4,height = 6,device = cairo_pdf)
+ggsave(filename = './output/PGA_ID2_present_vs_absent_smoking.pdf',width = 4,height = 6,device = cairo_pdf)
 
 
 # Signature
 # Figure 2c-d ---------------------------------------------------------------
 nmutation_input <-  0
 conflicts_prefer(dplyr::lag)
-source('/Users/zhangt8/NIH-Work/MutationSignature/mSigPortal/CBIIT/mSigPortal/Codes/Sigvisualfunc.R')
-load('/Users/zhangt8/NIH-Work/MutationSignature/mSigPortal/CBIIT/mSigPortal/Codes/Sigvisualfunc.RData')
+source('./functions/Sigvisualfunc.R')
+load('./data/Sigvisualfunc.RData')
 
 sigcol <- ncicolpal[1:length(colnames(cn68_activity)[-1])]
 names(sigcol) <- colnames(cn68_activity)[-1]
-
-
-
+nmutation_input <- 0
 tmp <- id2data %>% filter(Tumor_Barcode %in% hq_samples2,ID2_Present == "Present")%>% pull(Tumor_Barcode)
 sigdata <- cn68_activity %>% rename(Samples=Tumor_Barcode) %>% filter(Samples %in% tmp)
-data1 <- prevalence_plot(sigdata = sigdata,nmutation = nmutation_input,output_plot = paste0('ID2_present_prevalence.pdf'),colset = sigcol,rel_widths = c(1,4))
+data1 <- prevalence_plot(sigdata = sigdata,nmutation = nmutation_input,output_plot = paste0('./output/ID2_present_prevalence.pdf'),colset = sigcol,rel_widths = c(1,4))
 
 tmp <- id2data %>% filter(Tumor_Barcode %in% hq_samples2,ID2_Present == "Absent")%>% pull(Tumor_Barcode)
 sigdata <- cn68_activity %>% rename(Samples=Tumor_Barcode) %>% filter(Samples %in% tmp)
-data2 <- prevalence_plot(sigdata = sigdata,nmutation = nmutation_input,output_plot = paste0('ID2_absent_prevalence.pdf'),colset = sigcol,rel_widths = c(1,4))
+data2 <- prevalence_plot(sigdata = sigdata,nmutation = nmutation_input,output_plot = paste0('./output/ID2_absent_prevalence.pdf'),colset = sigcol,rel_widths = c(1,4))
 
 tdata <- bind_rows(
   data1$freq_data %>% mutate(Group='Present'),
   data2$freq_data %>% mutate(Group='Absent')
 )
 
-myggstyle()
+#myggstyle()
 
 plotdata <- tdata %>% 
   filter(Type == 'Prevalence by samples') %>% 
@@ -626,6 +624,7 @@ p1 <- plotdata %>%
   panel_border(color = 'gray10',size = 1)+
   theme(legend.position = 'none',panel.grid.major.y = element_line(linetype = 2,colour = 'gray90'))
 
+p1
 
 testdata <- cn68_activity %>%
   pivot_longer(-Tumor_Barcode) %>% 
@@ -662,9 +661,9 @@ p2 <- testdata %>%
   panel_border(color = 'black',linetype = 1,size=0.5)+
   coord_cartesian(clip = 'off')
 
+p2
 plot_grid(p2,p1,align = 'v',axis = 'lr',ncol = 1,rel_heights = c(2,2))
 
-ggsave(filename = 'CNV_signature_ID2_present_vs_absent.pdf',width = 6,height = 5.5,device = cairo_pdf)
-
+ggsave(filename = './output/CNV_signature_ID2_present_vs_absent.pdf',width = 6,height = 5.5,device = cairo_pdf)
 
 

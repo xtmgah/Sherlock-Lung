@@ -1,0 +1,883 @@
+---
+title: "Tumor Evolution Analysis in LUAD (Sherlock-Lung)"
+author: "Tongwu Zhang"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    toc_depth: 3
+    number_sections: true
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+
+## Overview
+This R Markdown document reproduces the main analyses and figures for tumor evolution in high-clonality LUAD (Lung Adenocarcinoma) dataset from the Sherlock-Lung study
+
+manuscript title: Deciphering lung adenocarcinoma evolution and the role of LINE-1 retrotransposition
+
+Fig. 1: Evolutionary dynamics of lung cancer.
+
+---
+
+## Load Required Libraries and Set Plotting Styles 
+(You may need to install some packages if missing)
+
+```{r}
+library(tidyverse)
+library(ggplot2)
+library(ggsankey)
+library(scales)
+library(hrbrthemes)   # For theme_ipsum_rc
+library(cowplot)
+library(forcats)
+library(ggrepel)
+library(ggnewscale)
+library(data.table)
+library(ggasym)
+library(ggpmisc)
+library(broom)
+library(ggsci)
+
+# --- Load Input Datasets ------------------------------------------------------
+# All data files should be placed in the appropriate subfolders.
+# Example folder structure:
+#   ./data/           - for main input files
+#   ./functions/      - for custom R functions
+#   ./output/         - for saving plots and results
+
+# Replace the filenames below with your actual dataset filenames.
+load('./data/BBsolution_final3_short.RData', verbose = TRUE)
+load('./data/covdata0.RData', verbose = TRUE)
+load('./data/clinical_data.RData', verbose = TRUE)
+load('./data/sherlock_data_all.RData', verbose = TRUE)
+load('./data/sherlock_variable.RData', verbose = TRUE)
+load('./data/sp_group_data.RData', verbose = TRUE)
+load('./data/id2data.RData', verbose = TRUE)
+
+# Load additional analysis datasets
+load('./data/Chronological_timing_short.RData', verbose = TRUE)
+load('./data/clsdata.RData', verbose = TRUE)
+load('./data/ZTW_functions.RData', verbose = TRUE)
+load('./data/DP_info_data.RData', verbose = TRUE)
+load('./data/covdata0.RData', verbose = TRUE)
+load('./data/Signature_Lumidl.RData')
+load('./data/Mutation_Signature_Probability_SBS.RData', verbose = TRUE)
+load('./data/sherlock_maf.RData', verbose = TRUE)
+load('./data/sherlock_driver_mutations.RData', verbose = TRUE)
+load('./data/sherlock_mt.RData', verbose = TRUE)
+load('./data/sigcol.RData', verbose = TRUE)
+
+# --- Subset to LUAD high clonality data Only ------------------------------------------------------
+# Filter to high-quality LUAD samples only
+hq_samples2 <- covdata0 %>%
+  filter(Histology == 'Adenocarcinoma', Tumor_Barcode %in% hq_samples) %>%
+  pull(Tumor_Barcode)
+rm(list = c('hq_samples'))
+
+```
+## Fig. 1a: Sankey diagram illustrating high-clonality WGS data summary from Sherlock-Lung
+```{r}
+# Create a summary table of LUAD cohort and plot group composition
+tdata0 <- covdata0 %>%
+  left_join(sp_group_data2) %>%
+  mutate(
+    Data = if_else(
+      Tumor_Barcode %in% hq_samples2, 
+      'High-quality tumors', 
+      'Other tumors'
+    )
+  ) %>%
+  select(Tumor_Barcode, Data, Histology, SP_Group_New) %>%
+  filter(Histology == "Adenocarcinoma", Tumor_Barcode %in% hq_samples2)
+
+# Sankey data preparation
+tdata <- tdata0 %>% make_long(Data, SP_Group_New)
+tdata_nr <- tdata %>%
+  filter(!is.na(node)) %>%
+  group_by(x, node) %>%
+  summarise(count = n())
+
+tdata <- tdata %>% left_join(tdata_nr)
+tdata$node <- factor(tdata$node, levels = c('High-quality tumors', 'AS_N', 'EU_N', 'EU_S', 'Others'))
+
+# Sankey plot
+ggplot(
+  tdata,
+  aes(
+    x = x, next_x = next_x,
+    node = node, next_node = next_node,
+    fill = factor(node), label = node
+  )
+) +
+  geom_sankey(flow.alpha = 0.6, node.color = "gray30") +
+  geom_sankey_text(size = 4, color = "black") +
+  #geom_sankey_text(aes(label = count), size = 3.5, check_overlap = TRUE) +
+  scale_fill_manual(
+    values = c("#14315C","#E64B35FF", "#4DBBD5FF", "#00A087FF", "#3C5488FF" )
+  ) +
+  theme_sankey(base_size = 18) +
+  labs(x = NULL) +
+  theme_ipsum_rc(axis = FALSE, axis_text_size = 16) +
+  theme(
+    axis.text.y = element_blank(),
+    panel.grid = element_blank(),
+    legend.position = "none"
+  )
+
+# ggsave('./output/Sherlock_hq_LUAD_WGS_dataset.pdf', width = 7, height = 5, device = cairo_pdf)
+```
+
+## Fig. 1b: Proportion of tumor samples exhibiting whole genome doubling (WGD) across AS_N, EU_N, EU_S and “Others”
+```{r}
+# Plot WGD frequency in LUAD HQ samples by spatial group
+tmp <- BBsolution4 %>%
+  filter(Tumor_Barcode %in% hq_samples2) %>%
+  left_join(wgs_groups_info) %>%
+  count(SP_Group, WGD_Status) %>%
+  group_by(SP_Group) %>%
+  mutate(Freq = n / sum(n)) %>%
+  ungroup()
+
+# Bar plot of WGD frequency
+p2 <- tmp %>%
+  left_join(sp_group_data) %>%
+  ggplot(aes(
+    x = SP_Group_New,
+    y = n,
+    fill = SP_Group_New,
+    alpha = WGD_Status
+  )) +
+  geom_bar(stat = "identity", position = "fill", width = 0.8) +
+  geom_text(
+    aes(label = paste0(n, '\n', sprintf("%1.1f", Freq * 100), "%")),
+    position = position_fill(vjust = 0.5),
+    colour = "black",
+    size = 3.5
+  ) +
+  scale_y_continuous(
+    breaks = pretty_breaks(),
+    labels = percent_format(),
+    expand = c(0, 0)
+  ) +
+  scale_fill_manual(values = sp_group_color_new) +
+  scale_alpha_manual(values = c(0.5, 1)) +
+  theme_ipsum_rc(
+    axis_title_just = 'm',
+    axis_title_size = 16,
+    axis_text_size = 12,
+    grid = 'Yy',
+    ticks = FALSE
+  ) +
+  labs(fill = "Group", x = "", y = 'Percentage') +
+  guides(fill = "none")
+
+p2
+
+#ggsave('./output/wgd_frequency_hq_luad.pdf', p2, width = 5, height = 6, device = cairo_pdf)
+
+```
+## Fig. 1c: Distribution of the percentage of mutations with a copy number 2, considering only mutations attributed to clock-like signatures (SBS1 and SBS5)
+
+```{r}
+# Load additional data for Figure 1c
+# Calculate ratio of mutations with copy number = 2
+tmp <- Mutation_Signature_Probability_SBS %>%
+  left_join(DP_info_data %>% select(ID, no.chrs.bearing.mut)) %>%
+  filter(no.chrs.bearing.mut == 2) %>%
+  group_by(Tumor_Barcode) %>%
+  summarise(CNV2 = sum(SBS1 + SBS5, na.rm = TRUE))
+
+tmp <- Mutation_Signature_Probability_SBS %>%
+  left_join(DP_info_data %>% select(ID, no.chrs.bearing.mut)) %>%
+  group_by(Tumor_Barcode) %>%
+  summarise(Total = sum(SBS1 + SBS5, na.rm = TRUE)) %>%
+  left_join(tmp)
+
+tmp <- tmp %>% replace_na(list(CNV2 = 0))
+
+tmp <- BBsolution4 %>%
+  select(Tumor_Barcode, WGD_Status) %>%
+  left_join(wgs_groups_info) %>%
+  left_join(tmp) %>%
+  mutate(Ratio = CNV2 / Total)
+
+# Density plot for WGD tumors
+p3 <- tmp %>%
+  filter(WGD_Status == 'WGD') %>%
+  left_join(sp_group_data) %>%
+  filter(SP_Group != "Others") %>%
+  ggplot(aes(Ratio, fill = SP_Group_New, group = SP_Group_New)) +
+  geom_density(alpha = 0.8) +
+  scale_x_continuous(
+    breaks = pretty_breaks(),
+    labels = percent_format(),
+    limits = c(0, 1)
+  ) +
+  scale_y_continuous(breaks = pretty_breaks()) +
+  scale_fill_manual(values = sp_group_color_new, breaks = sp_group_major_new) +
+  theme_ipsum_rc(
+    base_size = 14,
+    axis_title_just = 'm',
+    axis_title_size = 16,
+    grid = FALSE,
+    ticks = TRUE
+  ) +
+  panel_border(color = 'black') +
+  labs(fill = 'Group', x = '% mutations with copy number = 2', y = 'Density')
+
+p3
+#ggsave('./output/WGD_CNV2_all.pdf', p3, width = 6, height = 4, device = cairo_pdf)
+```
+
+## Fig. 1d: Box plots depicting the proportion of total mutations attributed to different clonal statuses
+```{r}
+# Calculate ratio of clonal [early]+[late] mutations
+clonal_ratio <- clsdata %>%
+  filter(!is.na(CLS)) %>%
+  select(-Freq) %>%
+  pivot_wider(names_from = CLS, values_from = n) %>%
+  mutate(
+    Ratio = (`clonal [early]` + `clonal [late]`) /
+      (`clonal [early]` + `clonal [late]` + `clonal [NA]`)
+  ) %>%
+  filter(Tumor_Barcode %in% hq_samples2) %>%
+  summarise(Ratio = median(Ratio, na.rm = TRUE))
+print(clonal_ratio)
+
+# Boxplot: Proportion of mutations by clonality and group
+p4 <- clsdata %>%
+  left_join(wgs_groups_info) %>%
+  left_join(sp_group_data) %>%
+  filter(Tumor_Barcode %in% hq_samples2, !is.na(CLS)) %>%
+  ggplot(aes(CLS, Freq, fill = SP_Group_New)) +
+  geom_boxplot() +
+  labs(x = "", y = "Proportion of total mutations", fill = 'Group') +
+  scale_fill_manual(
+    values = sp_group_color_new,
+    breaks = names(sp_group_color_new)
+  ) +
+  theme_ipsum_rc(
+    axis_text_size = 12,
+    axis_title_just = 'm',
+    axis_title_size = 14
+  ) +
+  theme(axis.text.x = element_text(angle = 30, vjust = 1, hjust = 1)) +
+  panel_border(color = 'black')
+p4
+#ggsave('./output/CLS_SP_Group_hq_luad.pdf', p4, width = 6, height = 6, device = cairo_pdf)
+```
+## Fig.1e: Enrichment of early clonal mutations within driver genes in never-smokers and smokers.
+
+For each cancer driver gene, a Fisher’s exact test was performed on a 2x2 contingency table (binary variables: smoking status and early clonal mutation status). The significance thresholds for P < 0.05 (green) and FDR < 0.05 (red), calculated using the Benjamini–Hochberg method, are indicated by dashed lines. 
+
+```{r my-plot, fig.width=12, fig.height=10}
+# Load required data (relative paths for reproducibility)
+genelist <- readr::read_rds('./data/drivers_intogene.RDS') %>% pull(symbol)
+
+# Join clonality info to driver mutations
+clonality_info <- sherlock_mtvcf %>% select(Tumor_Barcode, MutationID, CLS)
+driver_tbl <- sherlock_driver_mutations %>%
+  mutate(Chromosome = stringr::str_remove(Chromosome, "^chr")) %>%
+  mutate(MutationID = paste(Chromosome, Start_Position, Reference_Allele, Tumor_Seq_Allele2, sep = ":")) %>%
+  select(Tumor_Barcode, MutationID, Hugo_Symbol, Variant_Classification) %>%
+  left_join(clonality_info, by = c("Tumor_Barcode", "MutationID"))
+
+# Restrict to genelist and high-quality LUAD samples
+tmpdata <- driver_tbl %>%
+  left_join(wgs_groups_info %>% select(Tumor_Barcode, SP_Group), by = "Tumor_Barcode") %>%
+  filter(Hugo_Symbol %in% genelist, Tumor_Barcode %in% hq_samples2)
+
+# Frequency by group, gene, clonality
+freq_tbl <- tmpdata %>%
+  count(SP_Group, Hugo_Symbol, CLS) %>%
+  left_join(
+    wgs_groups_info %>%
+      filter(Tumor_Barcode %in% hq_samples2) %>%
+      count(SP_Group, name = "size"),
+    by = "SP_Group"
+  ) %>%
+  mutate(Freq = n / size) %>%
+  arrange(desc(Freq))
+
+# Only genes with at least 8 total mutations
+genelist_plot <- freq_tbl %>%
+  group_by(Hugo_Symbol) %>%
+  summarise(n = sum(n), .groups = "drop") %>%
+  arrange(desc(n)) %>%
+  filter(n > 8) %>%
+  pull(Hugo_Symbol)
+
+# Barplot: stacked (counts)
+p_e1 <- freq_tbl %>%
+  left_join(sp_group_data, by = "SP_Group") %>%
+  filter(Hugo_Symbol %in% genelist_plot) %>%
+  mutate(Hugo_Symbol = factor(Hugo_Symbol, levels = genelist_plot)) %>%
+  ggplot(aes(Hugo_Symbol, Freq, fill = CLS)) +
+  geom_bar(position = "stack", stat = "identity", size = 0.1) +
+  facet_wrap(~SP_Group_New, ncol = 1, scales = "free") +
+  scale_fill_manual(values = clscolors) +
+  scale_y_continuous(breaks = scales::pretty_breaks(), labels = scales::percent_format()) +
+  labs(x = "", y = "Driver mutation frequency\n", fill = "") +
+  theme_ipsum_rc(axis_text_size = 12, axis_title_just = "m", axis_title_size = 16) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5), panel.spacing = unit(0.1, "lines"))
+
+p_e1
+
+#ggsave('./output/Driver_Gene_Clonality.pdf', p_e1, width = 9, height = 12, device = cairo_pdf)
+
+# Barplot: proportions (normalized within gene)
+p_e2 <- freq_tbl %>%
+  left_join(sp_group_data, by = "SP_Group") %>%
+  filter(Hugo_Symbol %in% genelist_plot) %>%
+  mutate(Hugo_Symbol = factor(Hugo_Symbol, levels = genelist_plot)) %>%
+  ggplot(aes(Hugo_Symbol, Freq, fill = CLS)) +
+  geom_bar(position = "fill", stat = "identity", size = 0.1) +
+  facet_wrap(~SP_Group_New, ncol = 1, scales = "free") +
+  scale_fill_manual(values = clscolors) +
+  scale_y_continuous(breaks = scales::pretty_breaks(), labels = scales::percent_format()) +
+  labs(x = "", y = "Proportion\n", fill = "") +
+  theme_ipsum_rc(axis_text_size = 12, axis_title_just = "m", axis_title_size = 16) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5), panel.spacing = unit(0.1, "lines"))
+
+p_e2
+
+#ggsave('./output/Driver_Gene_Clonality2.pdf', p_e2, width = 9, height = 12, device = cairo_pdf)
+
+# =================== Statistical Enrichment: Fisher's Exact Test ===================
+
+# Example: N_U vs S_U for enrichment of 'clonal [early]' in each gene
+
+# proportion of clonal mutations vs other mutation by fisher exact test
+tmpdata %>%
+  filter(SP_Group %in% c('N_A', 'N_U')) %>%
+  mutate(CLS = if_else(CLS == 'clonal [early]', 'Yes', 'No')) %>%
+  select(Tumor_Barcode, Hugo_Symbol, CLS, SP_Group) %>%
+  # unique() %>%
+  # count(Tumor_Barcode,Hugo_Symbol,sort=T) %>%
+  mutate(CLS = as.factor(CLS), SP_Group = as.factor(SP_Group)) %>%
+  group_by(Hugo_Symbol) %>%
+  do(tidy(fisher.test(.$CLS, .$SP_Group))) %>%
+  arrange(p.value)
+
+tmpdata %>%
+  filter(SP_Group %in% c('N_U', 'S_U')) %>%
+  mutate(CLS = if_else(CLS == 'clonal [early]', 'Yes', 'No')) %>%
+  select(Tumor_Barcode, Hugo_Symbol, CLS, SP_Group) %>%
+  # unique() %>%
+  # count(Tumor_Barcode,Hugo_Symbol,sort=T) %>%
+  mutate(CLS = as.factor(CLS), SP_Group = as.factor(SP_Group)) %>%
+  group_by(Hugo_Symbol) %>%
+  do(tidy(fisher.test(.$CLS, .$SP_Group))) %>%
+  arrange(p.value)
+
+tresult <- tmpdata %>%
+  filter(SP_Group != 'Others') %>%
+  mutate(SP_Group = if_else(SP_Group %in% c('N_U', 'N_A'), 'Yes', 'No')) %>%
+  mutate(CLS = if_else(CLS == 'clonal [early]', 'Yes', 'No')) %>%
+  select(Tumor_Barcode, Hugo_Symbol, CLS, SP_Group) %>%
+  # unique() %>%
+  # count(Tumor_Barcode,Hugo_Symbol,sort=T) %>%
+  mutate(CLS = as.factor(CLS), SP_Group = as.factor(SP_Group)) %>%
+  group_by(Hugo_Symbol) %>%
+  do(tidy(fisher.test(.$CLS, .$SP_Group))) %>%
+  ungroup() %>%
+  arrange(p.value) %>%
+  filter(Hugo_Symbol %in% genelist) %>%
+  mutate(FDR = p.adjust(p.value))
+
+# Volcano plot
+p_volcano <- tresult %>%
+  left_join(
+    freq_tbl %>%
+      group_by(Hugo_Symbol, CLS) %>%
+      summarise(n = sum(n)) %>%
+      mutate(Ratio = n / sum(n)) %>%
+      filter(CLS == 'clonal [early]') %>%
+      arrange(Ratio) %>%
+      ungroup() %>%
+      select(Hugo_Symbol, Ratio)
+  ) %>%
+  ggplot(aes(log2(estimate), -log10(p.value))) +
+  geom_hline(yintercept = -log10(0.001725), linetype = 2, col = '#BB0E3D') +
+  geom_hline(yintercept = -log10(0.05), linetype = 2, col = "#4daf4a") +
+  geom_vline(xintercept = 0, col = '#cccccc', size = 0.25) +
+  geom_point(aes(size = Ratio, fill = estimate > 1), pch = 21, stroke = 0.5) + #result %>% arrange(FDR) %>% filter(FDR<0.05) %>% tail(n=1) %>% pull(p.value)aes(size=Freq),
+  #scale_shape_manual(values = c(21,22,24)) +
+  ggrepel::geom_text_repel(
+    data = tresult %>% filter(p.value < 0.05),
+    aes(label = Hugo_Symbol)
+  ) +
+  theme_ipsum_rc(
+    base_size = 15,
+    axis_title_just = 'm',
+    axis_title_size = 16,
+    ticks = T
+  ) +
+  theme(
+    legend.position = 'top',
+    panel.grid.major.x = element_blank(),
+    panel.grid.minor = element_blank(),
+    legend.key.width = unit(0.7, 'cm')
+  ) +
+  coord_cartesian(clip = 'off') +
+  #scale_fill_manual(values= ncicolpal)+
+  scale_fill_aaas() +
+  scale_x_continuous(breaks = pretty_breaks(n = 7), limits = c(-5.1, 5.1)) +
+  scale_y_continuous(breaks = pretty_breaks()) +
+  scale_size_binned(nice.breaks = T, n.breaks = 6) +
+  panel_border(color = 'black', size = 0.3) +
+  labs(
+    x = 'log2(Odds ratio)',
+    y = '-log10(P-value)',
+    fill = 'Enrichment',
+    size = 'Proportion'
+  ) + #fill='Early clonal mutation enriched in',size='Proportion of early clonal mutation'
+  guides(fill = guide_legend(override.aes = list(size = 3.5)))
+
+p_volcano
+#ggsave('./output/Driver_Gene_EarlyClonal_Enrichment_volcano.pdf', p_volcano, width = 7, height = 6, device = cairo_pdf)
+```
+## Old Fig. 1f - ID2/ASCETIC Group Patterns (removed from mansucripts)
+```{r}
+# 
+# # Load ASCETIC/ID2 group data and gene frequency data
+# load('./data/ASCETIC_ID2_group_pattern.RData', verbose = TRUE)
+# # Assume gene_freq is prepared as in your workflow, or recompute as needed.
+# # For the following, gene_freq should have columns for each group, e.g. AS_N, EU_N, EU_S, Others
+# 
+# # Example for AS_N group (repeat similar for other groups):
+# datatmp <- df_asn %>% slice(1:5) %>% filter(from != 'ELF3')
+# datatmp$from_rank = "1"
+# datatmp$to_rank = "2"
+# # Add wildtype for initial node
+# 
+# # Reformat for plotting
+# as_n_curve <- datatmp %>%
+#   select(gene = from, rank = from_rank) %>%
+#   left_join(gene_freq %>% select(gene, AS_N)) %>%
+#   mutate(from = 'WT', from_rank = "0") %>%
+#   select(from, to = gene, value = AS_N, from_rank, to_rank = rank) %>%
+#   bind_rows(datatmp)
+# 
+# rankdata <- bind_rows(
+#   as_n_curve %>% select(gene = from, rank = from_rank),
+#   as_n_curve %>% select(gene = to, rank = to_rank)
+# ) %>% unique() %>% mutate(rank = as.integer(rank))
+# 
+# # Define x/y coordinates for the arc diagram
+# max_gene_rank <- rankdata %>% count(rank, sort = TRUE) %>% slice(1) %>% pull(n)
+# datay <- rankdata %>%
+#   left_join(rankdata %>% count(rank, sort = TRUE)) %>%
+#   left_join(gene_freq %>% select(gene, AS_N)) %>%
+#   group_by(rank) %>%
+#   arrange((AS_N)) %>%
+#   mutate(seq = seq_along(gene)) %>%
+#   ungroup() %>%
+#   mutate(y = seq * max_gene_rank / (n + 1)) %>%
+#   select(gene, y)
+# 
+# datav <- left_join(rankdata %>% select(gene, x = rank), datay) %>%
+#   left_join(gene_freq %>% select(gene, freq = 'AS_N'))
+# 
+# dataz <- as_n_curve %>%
+#   arrange(value) %>%
+#   left_join(datav %>% select(from = gene, x, y)) %>%
+#   left_join(datav %>% select(to = gene, x2 = x, y2 = y)) %>%
+#   mutate(x2 = 0.98 * x2, y2 = y2)
+# 
+# # Arc diagram for AS_N group
+# p7 <- datav %>%
+#   ggplot(aes(x, y)) +
+#   geom_segment(
+#     data = dataz,
+#     aes(x = x, y = y, xend = x2, yend = y2, size = value, col = value),
+#     arrow = arrow(length = unit(0.04, 'npc'))
+#   ) +
+#   geom_point(fill = 'gray', col = 'black', pch = 21, size = 6) +
+#   geom_text(aes(label = gene), nudge_y = -0.08) +
+#   scale_color_viridis_c(alpha = 0.9, direction = -1) +
+#   theme_ipsum_rc(grid = FALSE, axis = FALSE) +
+#   labs(col = 'Number of Sample\n') +
+#   guides(size = 'none') +
+#   theme(
+#     axis.text.x = element_blank(),
+#     axis.title.x = element_blank(),
+#     axis.text.y = element_blank(),
+#     axis.title.y = element_blank(),
+#     legend.position = 'top',
+#     legend.key.width = unit(1.2, 'cm'),
+#     legend.key.height = unit(0.4, 'cm')
+#   )
+# ggsave('./output/AS_S_ascetic_infer_new.pdf', p7, width = 4.5, height = 4, device = cairo_pdf)
+# 
+# # Repeat similar code for EU_N, EU_S, Others using their respective dataframes (df_eun, df_eus, df_others) and gene_freq columns (EU_N, EU_S, Others)
+```
+
+## Fig. 1f: Dynamic mutational processes during clonal and subclonal tumor evolution.
+
+Fold changes between relative proportions of clonal and subclonal mutations attributed to individual mutational signatures. Each point represents a tumor sample, and points are colored by mutational signature. P-values from the Wilcoxon rank-sum test are displayed at the bottom of the boxplots.
+
+
+```{r my-plot2, fig.width=12, fig.height=10}
+apobec_ratio <- sherlock_variable %>%
+  #filter(str_starts(name,'SBS_')) %>%
+  #mutate(name=str_remove(name,'^ludmil_')) %>%
+  filter(name %in% c('SBS2_ratio', 'SBS13_ratio')) %>%
+  pivot_wider(names_from = 'name', values_from = value) %>%
+  mutate(APOBEC = SBS2_ratio + SBS13_ratio) %>%
+  select(Tumor_Barcode, APOBEC_Ratio = APOBEC)
+
+# APOBEC + Clonality
+# load('../DP_info_data.RData')
+# sigprobality <- read_delim('/Volumes/data/NSLC2/Mutations/Signature_1217/result_spextractor_cosmic3.2/NSLC.SBS288.all/SBS288/Suggested_Solution/COSMIC_SBS288_Decomposed_Solution/Activities/Decomposed_Mutation_Probabilities.txt',delim = '\t',col_names = T)
+# colnames(sigprobality)[1] <- 'Tumor_Barcode'
+# sigprobality <- sigprobality %>% mutate(Tumor_Barcode=str_replace(Tumor_Barcode,"_TPD_01$","_TPD_01.01")) #%>% rename(Tumor_Barcode=`Sample Names`)
+#
+# apobec_clone_data <- DP_info_data %>%
+#   select(Tumor_Barcode,ID,MutationTypes=mutType,Clone) %>%
+#   left_join(
+#     sigprobality %>% mutate(APOBEC=SBS2+SBS12) %>% select(Tumor_Barcode,MutationTypes,APOBEC)
+#   )
+
+apobec_clone_data <- Mutation_Signature_Probability_SBS %>%
+  mutate(APOBEC = SBS2 + SBS12) %>%
+  select(Tumor_Barcode, ID, MutationType, Clone, APOBEC)
+
+
+apobec_clone_data <- apobec_clone_data %>%
+  group_by(Tumor_Barcode, Clone) %>%
+  summarise(APOBEC = sum(APOBEC, na.rm = T), Total = n_distinct(ID)) %>%
+  ungroup()
+
+
+tmp <- apobec_clone_data %>%
+  select(-Total) %>%
+  pivot_wider(names_from = 'Clone', values_from = 'APOBEC') %>%
+  replace_na(replace = list(`N` = 0, Y = 0, `NA` = 0)) %>%
+  mutate(
+    Subclone_Ratio = N / (N + Y),
+    Enrichment = N / Y,
+    total = N + Y + `NA`
+  ) %>%
+  filter(total > 100) %>%
+  left_join(wgs_groups_info %>% select(Tumor_Barcode, SP_Group)) %>%
+  #filter(SP_Group!="Others") %>%
+  left_join(apobec_ratio)
+
+# hq sample set
+tmp <- tmp %>%
+  filter(Tumor_Barcode %in% hq_samples2) %>%
+  left_join(sp_group_data)
+
+
+# tmp %>%
+#   select(SP_Group,Tumor_Barcode,`APOBEC Enrichment (Subclonal/Clonal)`=Enrichment,`APOBEC subclonal_Ratio`=Subclone_Ratio) %>%
+#   pivot_longer(cols = -c(SP_Group,Tumor_Barcode)) %>%
+#   ggplot(aes(value,col=SP_Group))+
+#   geom_density(size=1)+
+#   facet_wrap(~name,scales = "free")+
+#   scale_x_continuous(breaks = pretty_breaks(),labels = label_comma())+
+#   scale_y_continuous(breaks = pretty_breaks(),labels = label_comma())+
+#   theme_ipsum_rc(axis_title_just = 'm',axis_title_size = 14)+
+#   labs(x="\nAPOBEC subclonal mutation ratio", y = "Density") +
+#   panel_border(color = 'black')
+#
+# ggsave(filename = 'APOBEC_Subclonality.pdf',width = 9,height = 5.5,device = cairo_pdf)
+
+tmp %>%
+  #filter(Enrichment>0) %>%
+  #mutate(Enrichment=if_else(Enrichment>5,5,Enrichment)) %>%
+  ggplot(aes(SP_Group_New, log2(Enrichment + 1), fill = (APOBEC_Ratio))) +
+  #annotation_logticks(sides="l")+
+  geom_jitter(
+    position = position_jitter(w = 0.2, h = 0),
+    size = 2.5,
+    shape = 21,
+    col = "white",
+    stroke = 0.2
+  ) +
+  geom_boxplot(fill = NA, outlier.shape = NA, width = 0.6) +
+  scale_y_continuous(
+    breaks = pretty_breaks(),
+    expand = expansion(mult = c(0.02, 0.02))
+  ) +
+  labs(
+    x = "",
+    y = "log2(FC +1), FC= APOBEC Subclonal/APOBEC Clonal",
+    fill = "APOBEC Ratio"
+  ) +
+  theme_ipsum_rc(
+    base_size = 14,
+    axis_title_size = 14,
+    axis_title_just = 'm',
+    grid = "Y",
+    ticks = TRUE,
+    axis = ""
+  ) +
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1)) +
+  panel_border(size = 0.5, color = "black") +
+  scale_fill_viridis_c() +
+  geom_hline(yintercept = 1, linetype = 2)
+
+#ggsave(filename = 'APOBEC_Subclonality1.pdf',width = 6,height = 9,device = cairo_pdf)
+# ggsave(
+#   filename = 'APOBEC_Subclonality1_hq_ID2paper_tmp.pdf',
+#   width = 6,
+#   height = 9,
+#   device = cairo_pdf
+# )
+
+
+tmp %>%
+  filter(N > 0) %>%
+  #filter(Enrichment>0) %>%
+  #mutate(Enrichment=if_else(Enrichment>5,5,Enrichment)) %>%
+  ggplot(aes(SP_Group_New, log2(Enrichment), fill = (APOBEC_Ratio))) +
+  #annotation_logticks(sides="l")+
+  geom_jitter(
+    position = position_jitter(w = 0.15, h = 0.05),
+    size = 2.5,
+    shape = 21,
+    col = "white",
+    stroke = 0.2
+  ) +
+  geom_boxplot(fill = NA, outlier.shape = NA, width = 0.6) +
+  scale_y_continuous(
+    breaks = pretty_breaks(),
+    expand = expansion(mult = c(0.02, 0.02))
+  ) +
+  labs(
+    x = "",
+    y = "log2(FC), FC=APOBEC Subclonal/APOBEC Clonal",
+    fill = "APOBEC Ratio"
+  ) +
+  theme_ipsum_rc(
+    base_size = 14,
+    axis_title_size = 14,
+    axis_title_just = 'm',
+    grid = "Y",
+    ticks = TRUE,
+    axis = ""
+  ) +
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1)) +
+  panel_border(size = 0.5, color = "black") +
+  scale_fill_viridis_c() +
+  geom_hline(yintercept = 0, linetype = 2)
+
+#ggsave(filename = 'APOBEC_Subclonality2.pdf',width = 6,height = 9,device = cairo_pdf)
+# ggsave(
+#   filename = 'APOBEC_Subclonality2_hq_ID2paper_tmp.pdf',
+#   width = 6,
+#   height = 9,
+#   device = cairo_pdf
+# )
+
+# Subclonality by the Ratio
+## add signature ratio
+mutation_ratio <- sherlock_variable %>%
+  # filter(str_starts(name,'ludmil_')) %>%
+  # mutate(name=str_remove(name,'^ludmil_')) %>%
+  filter(str_starts(name, 'SBS'), str_ends(name, 'ratio')) %>%
+  pivot_wider(names_from = 'name', values_from = value) %>%
+  dplyr::rename(APOBEC_ratio = SBS_APOBEC_ratio) %>%
+  pivot_longer(-Tumor_Barcode) %>%
+  mutate(name = str_remove(name, '_ratio')) %>%
+  dplyr::rename(Mutation_Ratio = value)
+
+tmp <- Mutation_Signature_Probability_SBS %>%
+  mutate(SBS_APOBEC = SBS2 + SBS12) %>%
+  select(Tumor_Barcode, ID, MutationType, Clone, starts_with('SBS'))
+
+# tmp <- DP_info_data %>%
+#   select(Tumor_Barcode,ID,MutationTypes=mutType,Clone) %>%
+#   left_join(
+#     sigprobality %>% mutate(SBS_APOBEC=SBS2+SBS12) %>% select(Tumor_Barcode,MutationTypes,contains('SBS'))
+#   )
+tmp <- tmp %>%
+  filter(!is.na(Clone)) %>%
+  group_by(Tumor_Barcode, Clone) %>%
+  summarise_at(vars(contains('SBS')), sum, na.rm = TRUE) %>%
+  ungroup()
+
+tmp <- tmp %>% pivot_longer(cols = -c(Tumor_Barcode, Clone))
+
+## clone vs suclone mutational signature
+#excludeSBS <- c('SBS7a','SBS7b','SBS7c','SBS7d','SBS17a','SBS17b','SBS28','SBS44','SBS39','SBS21')
+excludeSBS <- c('SBS21', 'SBS44')
+tmp %>%
+  group_by(name) %>%
+  do(tidy(wilcox.test(value ~ Clone, data = .))) %>%
+  ungroup() %>%
+  arrange(p.value) %>%
+  mutate(FDR = p.adjust(p.value, method = 'BH'))
+
+tmp <- tmp %>% mutate(name = str_remove(name, 'SBS_'))
+tmp0 <- tmp
+
+tmp <- tmp %>% filter(!(name %in% excludeSBS))
+
+## for the high quality data
+tmp <- tmp %>% filter(Tumor_Barcode %in% hq_samples2)
+# tmp2 <- tmp %>% group_by(Tumor_Barcode,Clone) %>% summarise(total=sum(value))
+
+tmp2 <- tmp %>%
+  select(Tumor_Barcode, Clone, name, value) %>%
+  group_by(Tumor_Barcode, Clone) %>%
+  summarise(total = sum(value)) %>%
+  ungroup() %>%
+  pivot_wider(
+    names_from = "Clone",
+    values_from = "total",
+    values_fill = list(value = 0)
+  ) %>%
+  dplyr::rename(Ytotal = Y, Ntotal = N)
+
+tmp3 <- tmp %>%
+  select(Tumor_Barcode, Clone, name, value) %>%
+  pivot_wider(
+    names_from = "Clone",
+    values_from = "value",
+    values_fill = list(value = 0)
+  ) %>%
+  left_join(tmp2) %>%
+  left_join(mutation_ratio) %>%
+  # left_join(sherlock_sis_numbers %>% select(Tumor_Barcode,SNV_Num)) %>%
+  filter(Ytotal > 100, Ntotal > 100, Y > 20, N > 20, Mutation_Ratio > 0.02) %>%
+  mutate(
+    Nratio = (N / Ntotal),
+    Yratio = (Y / Ytotal),
+    Fold = Nratio / Yratio
+  ) %>%
+  mutate(name = fct_reorder(name, Fold)) %>%
+  filter(name != 'APOBEC')
+
+tmpvalue <- tmp3 %>%
+  group_by(name) %>%
+  do(tidy(wilcox.test(.$Nratio, .$Yratio))) %>%
+  arrange(p.value) %>%
+  ungroup()
+
+source(
+  "./functions/Sigvisualfunc.R"
+)
+
+SBScolor <- sigcol
+# SBScolor['SBS36'] <- 'yellow4'
+# SBScolor['APOBEC'] <- "#f781bf"
+# SBScolor['SBS-Novel-A'] <- "#984ea3"
+# SBScolor['SBS-Novel-C'] <- "#3D4551"
+
+myggstyle()
+library(ggnewscale)
+tmp3 %>%
+  #mutate(Fold=if_else(Fold>4,4,Fold)) %>%
+  ggplot(aes(name, Fold, fill = name)) +
+  geom_hline(yintercept = 1, linetype = 2) +
+  #scale_y_continuous(trans = 'log10',limits = c(0.3,5),expand = c(0,0))+
+  #annotation_logticks(sides="l")+
+  geom_jitter(
+    aes(size = Mutation_Ratio),
+    position = position_jitter(w = 0.15, h = 0.01),
+    shape = 21,
+    col = "gray50",
+    stroke = 0.4
+  ) +
+  geom_boxplot(fill = NA, outlier.shape = NA, width = 0.6) +
+  #scale_y_continuous(breaks = pretty_breaks(),expand = expansion(mult = c(0.02,0.02)))+
+  scale_y_log10(
+    breaks = scales::trans_breaks("log10", function(x) 10^x),
+    labels = label_log(),
+    limits = c(0.1, 12)
+  ) +
+  annotation_logticks(sides = "l", outside = T) +
+  labs(x = "", y = "Fold Change (Subclonal/Clonal)") +
+  theme_ipsum_rc(
+    base_size = 14,
+    axis_title_size = 14,
+    axis_title_just = 'm',
+    grid = "Y",
+    ticks = TRUE,
+    axis = ""
+  ) +
+  theme(axis.text.x = element_text(angle = 60, vjust = 1, hjust = 1)) +
+  panel_border(size = 0.5, color = "black") +
+  scale_fill_manual(
+    "Signatures",
+    values = SBScolor,
+    breaks = levels(tmp3$name)
+  ) +
+  scale_size_binned(n.breaks = 6, range = c(1, 5)) +
+  guides(
+    fill = "none",
+    size = guide_legend(override.aes = list(fill = 'black'))
+  ) + #guide_legend(override.aes = list(size = 3))
+  ggnewscale::new_scale_fill() +
+  geom_tile(
+    data = tmpvalue %>%
+      mutate(Fold = 0.12, p.value = if_else(p.value > 0.05, NA_real_, p.value)),
+    aes(fill = -log10(p.value)),
+    height = .05
+  ) +
+  scale_fill_viridis_c() +
+  coord_cartesian(clip = "off")
+
+
+#ggsave(filename = 'SBS_enrich_subclone.pdf',width = 10,height = 7,device = cairo_pdf)
+# ggsave(
+#   filename = 'SBS_enrich_subclone_hq_ID2paper_tmp.pdf',
+#   width = 9,
+#   height = 8,
+#   device = cairo_pdf
+# )
+
+tmp3 %>%
+  left_join(wgs_groups_info %>% select(Tumor_Barcode, SP_Group)) %>%
+  #filter(SP_Group != "Others") %>%
+  left_join(sp_group_data2) %>%
+  #mutate(Fold=if_else(Fold>4,4,Fold)) %>%
+  ggplot(aes(name, log2(Fold + 1), fill = name)) +
+  geom_hline(yintercept = 1, linetype = 2) +
+  #scale_y_continuous(trans = 'log10',limits = c(0.3,5),expand = c(0,0))+
+  #annotation_logticks(sides="l")+
+  geom_jitter(
+    position = position_jitter(w = 0.15, h = 0.01),
+    size = 2,
+    shape = 21,
+    col = "#bbbbbb",
+    stroke = 0.2
+  ) +
+  geom_boxplot(fill = NA, outlier.shape = NA, width = 0.6) +
+  facet_wrap(~SP_Group_New, scales = 'free_y', ncol = 1) +
+  scale_y_continuous(
+    breaks = pretty_breaks(),
+    expand = expansion(mult = c(0.02, 0.02))
+  ) +
+  labs(x = "", y = "Fold Change (Subclonal/Clonal)") +
+  theme_ipsum_rc(
+    base_size = 14,
+    axis_title_size = 14,
+    axis_title_just = 'm',
+    grid = "Y",
+    ticks = TRUE,
+    axis = ""
+  ) +
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1)) +
+  panel_border(size = 0.5, color = "black") +
+  scale_fill_manual("Signatures", values = SBScolor, breaks = levels(tmp3$name))
+
+#ggsave(filename = 'SBS_enrich_subclone_group.pdf',width = 18,height = 7,device = cairo_pdf)
+# ggsave(
+#   filename = 'SBS_enrich_subclone_group_hq_ID2paper.pdf',
+#   width = 9,
+#   height = 12,
+#   device = cairo_pdf
+# )
+
+```
+## R session information
+```{r}
+sessionInfo()
+```
