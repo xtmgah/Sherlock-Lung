@@ -72,7 +72,7 @@ The data/ folder is expected to contain most of the whole-genome sequencing (WGS
 
 As an example, we have included the normalized RNA-Seq data in R object format, as shown below.
 
-### RNA-Seq log2TPM Data (`rna_seq_log2cpm_data.RData`)
+#### RNA-Seq log2TPM Data (`rna_seq_log2cpm_data.RData`)
 
 This R object contains an RNA-Seq quantification matrix in log2-transformed CPM values (`rna_seq_log2cpm_data`), derived from samples used in this manuscript as part of the **Sherlock-Lung Study**.
 
