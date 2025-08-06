@@ -4,7 +4,8 @@
 This repository contains R code used to generate the visualizations for all main figures developed as part of the Sherlock-Lung project. The corresponding R scripts also include additional plots for relevant supplementary figures.
 
 For reproducibility purposes, we have also included the R Markdown (.Rmd) files along with their rendered HTML outputs for each script.
-*** To see the full display and formatting correctly, please download the HTML file and open it on your local computer. ***
+
+**To see the full display and formatting correctly, please download the HTML file and open it on your local computer.**
 
 ## Figures included ## 
 
