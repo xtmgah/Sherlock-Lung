@@ -68,7 +68,7 @@ Output Files: All visualizations and generated plots will be saved in the output
 Functions: The functions/ folder contains additional helper functions required for visualization. These will be sourced automatically by the scripts.
 
 Note:
-The data/ folder is expected to contain most of the whole-genome sequencing (WGS) analysis results from the Sherlock-Lung study (these are large files). These data files are not included in this repository due to data access restrictions. To obtain the WGS raw data, users must apply through dbGaP (details provided in our manuscript). For access to the processed analysis results (corresponding R objects can be referenced in the rendered HTML files), please contact the Principal Investigator of the Sherlock-Lung study directly.
+The data/ folder is expected to contain most of the whole-genome sequencing (WGS) analysis results from the Sherlock-Lung study. These are large files and are not included in this repository due to data access restrictions. To obtain the raw WGS data, users must apply through dbGaP (application details are provided in our manuscript). All sequencing raw data have been deposited in dbGaP in accordance with NIH guidelines and data use restrictions. For any questions, please contact the Principal Investigator (Dr. Maria Teresa Landi) of the Sherlock-Lung study directly.
 
 As an example, we have included the normalized RNA-Seq data in R object format, as shown below.
 
