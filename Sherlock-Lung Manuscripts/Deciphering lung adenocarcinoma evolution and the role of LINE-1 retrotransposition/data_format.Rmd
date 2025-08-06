@@ -1,0 +1,132 @@
+---
+title: "Tumor Evolution Analysis in LUAD (Sherlock-Lung)"
+author: "Tongwu Zhang"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    toc_depth: 3
+    number_sections: true
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+
+This document loads each .RData file in the data/ directory and reports:
+
+The names of all R objects contained in each file.
+
+The class and type of each object.
+
+For data frames, matrices, or arrays, the dimensions are also shown.
+
+# List all R objects
+```{r index, results='asis', echo=FALSE}
+# List all .RData files in the "data" directory
+rdata_files <- list.files("data", pattern = "\\.RData$", full.names = TRUE)
+
+# Generate index with links
+cat("<ul>\n")
+for (file in rdata_files) {
+  file_label <- basename(file)
+  cat("<li><b>", file_label, "</b><ul>\n")
+  
+  # Load into a temporary environment
+  temp_env <- new.env()
+  loaded_objs <- load(file = file, envir = temp_env)
+  
+  if (length(loaded_objs) == 0) {
+    cat("<li>No objects found</li>\n")
+  } else {
+    for (obj_name in loaded_objs) {
+      # Create a safe anchor ID
+      anchor_id <- paste0("obj_", gsub("[^[:alnum:]_]", "_", obj_name), "_", gsub("[^[:alnum:]_]", "_", file_label))
+      cat("<li><a href='#", anchor_id, "'>", obj_name, "</a></li>\n")
+    }
+  }
+  cat("</ul></li>\n")
+}
+cat("</ul>\n")
+```
+
+
+## Object details
+```{r object_details, results='asis', echo=FALSE}
+library(tidyverse)
+library(kableExtra)
+
+# List all .RData files in the "data" directory
+rdata_files <- list.files("data", pattern = "\\.RData$", full.names = TRUE)
+
+# Loop over each RData file
+for (file in rdata_files) {
+  file_label <- basename(file)
+  cat("\n\n## File:", basename(file), "\n\n")
+  
+  # Load into a temporary environment to avoid overwriting current workspace
+  temp_env <- new.env()
+  loaded_objs <- load(file = file, envir = temp_env)
+  
+  if (length(loaded_objs) == 0) {
+    cat("No objects found in this file.\n\n")
+  }
+  
+  # For each object in the environment
+  for (obj_name in loaded_objs) {
+    # Create anchor for each object
+    #anchor_id <- paste0("obj_", gsub("[^[:alnum:]]", "_", obj_name), "_", basename(file))
+    anchor_id <- paste0("obj_", gsub("[^[:alnum:]_]", "_", obj_name), "_", gsub("[^[:alnum:]_]", "_", file_label))
+    # Header with anchor
+    cat(paste0("<div id='", anchor_id, "'>\n\n"))
+    cat("###", obj_name, "\n\n")
+    
+    obj <- temp_env[[obj_name]]
+    obj_class <- class(obj)
+    obj_type <- typeof(obj)
+    
+    cat("**Object Name:**", obj_name, "\n\n")
+    cat("- Class:", paste(obj_class, collapse = ", "), "\n")
+    cat("- Type:", obj_type, "\n")
+    
+    if (is.data.frame(obj) || is.matrix(obj) || is.array(obj)) {
+      dimdata <-  paste(dim(obj), collapse = " x ")
+    } else {
+      dimdata <- length(obj)
+    }
+    
+    cat("- Dimensions:", dimdata, "\n")
+    
+    colname_data <- paste0(colnames(obj),collapse = ' ,' )
+    cat("- list all the column names: ", colname_data, "\n\n")
+    
+    cat("- Example of the first 10 rows:\n\n")
+    obj <- head(obj)
+    if (is.data.frame(obj)) {
+      # maxd <- ncol(obj)
+      # if(maxd>6){
+      #   obj <- obj[,1:6]
+      # }
+      cat("\n\n")
+      #print(kable(obj, format = "simple"))
+      cat("<pre><code>\n\n")
+      print(obj)
+      cat("</code></pre>\n\n")
+      cat("\n\n")
+    } else {
+      cat("<pre><code>\n\n")
+      print(obj)
+      cat("</code></pre>\n\n")
+    }
+    
+    cat("--------------------------------------------------------------------------------")
+    cat("\n\n")
+    cat("</div>\n\n")
+  }
+  
+  cat("^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^")
+  cat("\n")
+  cat("\n")
+}
+
+```

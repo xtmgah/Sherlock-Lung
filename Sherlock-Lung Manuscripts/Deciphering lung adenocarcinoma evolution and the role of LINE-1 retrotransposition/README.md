@@ -72,7 +72,9 @@ Functions: The functions/ folder contains additional helper functions required f
 Note:
 The data/ folder is expected to contain most of the whole-genome sequencing (WGS) analysis results from the Sherlock-Lung study. These are large files and are not included in this repository due to data access restrictions. To obtain the raw WGS data, users must apply through dbGaP (application details are provided in our manuscript). All sequencing raw data have been deposited in dbGaP in accordance with NIH guidelines and data use restrictions. For any questions, please contact the Principal Investigator (Dr. Maria Teresa Landi) of the Sherlock-Lung study directly.
 
-As an example, we have included the normalized RNA-Seq data in R object format, as shown below.
+
+## Data format
+As an example, we have included the normalized RNA-Seq data in R object format, as shown below. You can find all the data format in the html file "data_format.html"
 
 #### RNA-Seq log2TPM Data (`rna_seq_log2cpm_data.RData`)
 
