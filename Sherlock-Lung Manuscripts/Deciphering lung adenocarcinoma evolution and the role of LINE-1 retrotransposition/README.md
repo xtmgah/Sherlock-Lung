@@ -1,11 +1,21 @@
 
 ## Deciphering lung adenocarcinoma evolution and the role of LINE-1 retrotransposition
 
-This repository contains R code used to generate the visualizations for all main figures developed as part of the Sherlock-Lung project. The corresponding R scripts also include additional plots for relevant supplementary figures.
+This repository contains R code used to generate primary and supplementary visualizations for the Sherlock-Lung project. It supports the manuscript "Deciphering lung adenocarcinoma evolution and the role of LINE-1 retrotransposition".
 
-For reproducibility purposes, we have also included the R Markdown (.Rmd) files along with their rendered HTML outputs for each script.
+The repository includes:
+- R scripts for main figures and supplementary plots
+- Sample RNA-Seq data for demo
+- R Markdown files and rendered HTML outputs for reproducibility
 
-**!!!!To see the full display and formatting correctly, please download the HTML file and open it on your local computer.**
+**Note: To properly view the HTML files with full interactivity and formatting, download and open them locally on your computer.**
+
+Software Dependencies:
+- R version ≥ 4.0
+- All required R packages are listed within each R script, R Markdown (.Rmd), and rendered HTML output files.
+
+Hardware Requirements:
+The R scripts are designed to run on standard desktop or laptop machines.
 
 ## Figures included ## 
 
