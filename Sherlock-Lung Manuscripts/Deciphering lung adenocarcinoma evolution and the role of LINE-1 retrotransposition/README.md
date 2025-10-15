@@ -82,7 +82,7 @@ Functions: The functions/ folder contains additional helper functions required f
 **Place all data, functions, and output in the same directory as the R script or R Markdown file.** 
 
 Note:
-The data/ folder is expected to contain most of the whole-genome sequencing (WGS) analysis results from the Sherlock-Lung study. These are large files and are not included in this repository due to data access restrictions. To obtain the raw WGS data, users must apply through dbGaP (application details are provided in our manuscript). All sequencing raw data have been deposited in dbGaP in accordance with NIH guidelines and data use restrictions. For any questions, please contact the Principal Investigator (Dr. Maria Teresa Landi) of the Sherlock-Lung study directly.
+The data/ folder is expected to contain most of the whole-genome sequencing (WGS) analysis results from the Sherlock-Lung study. These are large files and are not included in this repository due to data access restrictions. To obtain the raw WGS data, users must apply through dbGaP (application details are provided in the manuscript). All sequencing raw data have been deposited in dbGaP in accordance with NIH guidelines and data use restrictions. For any questions, please contact the Principal Investigator (Dr. Maria Teresa Landi) of the Sherlock-Lung study directly.
 
 
 ## Data format
